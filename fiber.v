@@ -63,10 +63,12 @@ localparam NONE             = 4'b0000;
 //-----------------------------------------------------------
 
 //=============================================================================
-wire [$clog2(SETS)-1:0] cur_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
-wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = i_addr[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
+wire [$clog2(SETS)-1:0] cur_set = i_addr_d[$clog2(DATA_WIDTH) +: $clog2(SETS)];
+wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = i_addr_d[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
 wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0];
 
+
+reg [$clog2(SETS)-1:0] set_to_write;
 wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_set      [WAYS-1:0];
 wire                                dirty_bits_set              [WAYS-1:0];
 reg [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0];
@@ -111,7 +113,7 @@ generate
                 ) data_array
                 (
                     .i_clk(i_clk),
-                    .i_address(cur_set),
+                    .i_address((is_new_request_fetch)? cur_set : set_to_write),
                     .i_write_data(data_write_data),
                     .i_bank_sel(data_bank_sel[i]),
                     .i_read_en(data_read_en),
@@ -218,8 +220,10 @@ always @(posedge i_clk) begin
         if (is_victim_dirty & state == FETCH_REQ) begin
             state <= NONE;
             internal_state <= SEND_DIRTY_VICTIM;
+            set_to_write <= cur_set;
         end else if (miss & state == FETCH_REQ) begin
             internal_state <= RECEIVE_DATA;
+            set_to_write <= cur_set;
         end 
 end
 
