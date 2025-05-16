@@ -207,6 +207,7 @@ always @(posedge i_clk) begin
     // i_data_i_valid_d <= i_data_i_valid;
 end
 
+assign o_type_ready = ~|state & ~|internal_state;
 
 wire [3:0] new_request = i_request_type_d & ({4{i_type_valid_d}} & {4{o_type_ready}});
 
