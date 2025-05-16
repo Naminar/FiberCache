@@ -82,7 +82,7 @@ reg [DATA_WIDTH-1:0] data_set [WAYS-1:0];
 reg [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
 reg tag_bank_sel [WAYS-1:0];
 reg tag_read_en;
-wire tag_write_en;
+reg tag_write_en;
 
 reg dirty_bits_write_data;
 reg dirty_bits_bank_sel [WAYS-1:0];
@@ -98,7 +98,7 @@ wire valid_bits_field        [SETS-1:0][WAYS-1:0];
 reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
 reg  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
 reg  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
-wire valid_bits_write_data   [SETS-1:0][WAYS-1:0];
+reg valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
 genvar i, k;
@@ -276,7 +276,7 @@ always @(*) begin
         eviction_meta_info_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ);
         dirty_bits_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ & victim_indicator_i[i]);
         // It's updated after data would be received
-        data_bank_sel[i] = is_new_request_fetch;
+        data_bank_sel[i] = is_new_request_fetch | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
 
         eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
     end
@@ -308,10 +308,14 @@ always @(*) begin
     tag_write_data = cur_tag;
     dirty_bits_write_data = 1'b0;
 
+    data_write_en = i_dram_data_i_valid & o_dram_data_i_ready;
+    data_write_data = i_dram_data;
+
 end
 
 reg [WAYS-1:0] hit_i;
 reg hit;
+reg miss;
 reg [PRIORITY_BITS-1:0] new_priority_set [WAYS-1:0];
 reg [SRRIP_BITS-1:0] new_srrip_set_inc [WAYS-1:0];
 reg [SRRIP_BITS-1:0] new_srrip_set_hit [WAYS-1:0];
@@ -323,12 +327,13 @@ always @(*) begin
     for (int i = 0; i < WAYS; i++)
         hit_i[i] = cur_tag == tag_set[i];
     hit = |hit_i;
+    miss = ~hit;
 
     for (int i = 0; i < WAYS; i++)
-        if (hit_i)
-            new_priority_set = priority_set[i] + 1;
+        if (hit_i[i])
+            new_priority_set[i] = priority_set[i] + 1;
         else
-            new_priority_set = priority_set[i];
+            new_priority_set[i] = priority_set[i];
 end
 
 always @(*) begin
@@ -378,7 +383,7 @@ end
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
         if (max_srrip_indicator[i])
-            new_srrip_set_miss[i] = {SRRIP_BITS-1{1'b1}, 1'b0};
+            new_srrip_set_miss[i] = {{SRRIP_BITS-1{1'b1}}, 1'b0};
         else
             new_srrip_set_miss[i] = new_srrip_set_inc[i];
     end
@@ -400,7 +405,7 @@ always @(*) begin
         victim_indicator_i[i] = miss & max_srrip_indicator[i];
 
     for (int i = 0; i < WAYS; i++)
-        is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i]
+        is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i];
     is_victim_dirty = |is_victim_dirty_i;
 end
 endmodule
