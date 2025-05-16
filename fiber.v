@@ -47,11 +47,14 @@ localparam READ_REQ     = 4'b0010;
 localparam WRITE_REQ    = 4'b0100;
 localparam CONSUME_REQ  = 4'b1000;
 
+localparam SEND_DIRTY_VICTIM = 4'b0001;
+localparam RECEIVE_DATA = 4'b0010;
+
 localparam NONE             = 4'b0000;
-localparam S_BUSY           = 4'b0001;
-localparam S_WAIT_DRAM      = 4'b0010;
-localparam S_WAIT_DRAM_R    = 4'b1000;
-localparam S_INSERT         = 4'b0100;
+// localparam S_BUSY           = 4'b0001;
+// localparam S_WAIT_DRAM      = 4'b0010;
+// localparam S_WAIT_DRAM_R    = 4'b1000;
+// localparam S_INSERT         = 4'b0100;
 
 //-----------------------------------------------------------
 //|    |   bank     |     256 sets      | 16 bytes in line  |
@@ -192,6 +195,8 @@ reg i_type_valid_d;
 // reg i_data_o_ready_d;
 
 reg [3:0] state;
+reg [3:0] internal_state;
+reg [WAYS-1:0] insert_data_handler;
 
 always @(posedge i_clk) begin
     i_nreset_d <= i_nreset;
@@ -208,6 +213,59 @@ wire [3:0] new_request = i_request_type_d & ({4{i_type_valid_d}} & {4{o_type_rea
 always @(posedge i_clk) begin
     if (~|state)
         state <= new_request;
+    else
+        if (is_victim_dirty & state == FETCH_REQ) begin
+            state <= NONE;
+            internal_state <= SEND_DIRTY_VICTIM;
+        end else if (miss & state == FETCH_REQ) begin
+            internal_state <= RECEIVE_DATA;
+        end 
+end
+
+reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
+
+always @(*) begin
+    o_dram_addr = i_addr_d;
+    for (int i = 0; i < WAYS; i++) begin
+       victim_data_i[i] = data_set[i] & {DATA_WIDTH{is_victim_dirty_i[i]}};
+    end
+    
+    o_dram_data_o = 0;
+    for (int i = 0; i < WAYS; i++)
+        o_dram_data_o = o_dram_data_o | victim_data_i[i];  
+
+end
+
+always @(posedge i_clk) begin
+    if (internal_state == SEND_DIRTY_VICTIM) begin
+        // o_dram_addr <= 0; // TODO: recreate addr to send dirty data;
+        // o_dram_data_o <= ; // maybe without register???
+        o_dram_data_o_valid <= 1'b1;
+    end
+    else if (internal_state == RECEIVE_DATA) begin
+        // o_dram_addr <= i_addr_d; // maybe without register???
+        o_dram_data_i_ready <= 1'b1;
+    end
+end
+
+always @(posedge i_clk) begin
+    if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
+        o_dram_data_o_valid <= 1'b0;
+        internal_state <= RECEIVE_DATA;
+    end
+end
+
+always @(posedge i_clk) begin
+    if (internal_state == RECEIVE_DATA & i_dram_data_i_valid & o_dram_data_i_ready) begin
+        o_dram_data_i_ready <= 1'b0;
+        internal_state <= NONE;
+    end
+end
+
+always @(posedge i_clk) begin
+    if (miss & state == FETCH_REQ)
+        for (int i = 0; i < WAYS; i++)
+            insert_data_handler[i] = victim_indicator_i[i];
 end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
