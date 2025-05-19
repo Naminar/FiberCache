@@ -24,9 +24,9 @@ module fiberBank #(
     output  wire    o_data_i_ready,
 
     // read requests ports
-    output  wire    [DATA_WIDTH-1:0] o_data_o,
-    output  wire    o_data_o_valid,
-    input   wire    i_data_o_ready,
+    output  reg    [DATA_WIDTH-1:0] o_pe_data_o,
+    output  reg    o_pe_data_o_valid,
+    input   wire    i_pe_data_o_ready,
 
     //////////////////// DRAM CROSS BAR ////////////////////
     output   reg    [ADDR_WIDTH-1:0] o_dram_addr,
@@ -49,6 +49,7 @@ localparam CONSUME_REQ  = 4'b1000;
 
 localparam SEND_DIRTY_VICTIM = 4'b0001;
 localparam RECEIVE_DATA = 4'b0010;
+localparam SEND_TO_PE = 4'b0100;
 
 localparam NONE             = 4'b0000;
 // localparam S_BUSY           = 4'b0001;
@@ -224,7 +225,7 @@ always @(posedge i_clk) begin
         end else if (miss & state == FETCH_REQ) begin
             internal_state <= RECEIVE_DATA;
             set_to_write <= cur_set;
-        end 
+        end
 end
 
 reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
@@ -234,10 +235,11 @@ always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
        victim_data_i[i] = data_set[i] & {DATA_WIDTH{is_victim_dirty_i[i]}};
     end
-    
+
+    // TODO: o_dram_data_o
     o_dram_data_o = 0;
     for (int i = 0; i < WAYS; i++)
-        o_dram_data_o = o_dram_data_o | victim_data_i[i];  
+        o_dram_data_o = o_dram_data_o | victim_data_i[i];
 
 end
 
@@ -253,8 +255,27 @@ always @(posedge i_clk) begin
     end
 end
 
+assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
+always @(posedge i_clk) begin
+    if (state == READ_REQ) begin
+        internal_state <= SEND_TO_PE;
+    end
+end
+
+always @(*) begin
+    o_pe_data_o = 0;
+    for (int i = 0; i < WAYS; i++) 
+        o_pe_data_o = o_pe_data_o | (data_set[i] & {DATA_WIDTH{hit_i[i]}});
+end
+
+always @(posedge i_clk) begin
+    if (i_pe_data_o_ready) 
+        internal_state <= NONE;
+end
+
 always @(posedge i_clk) begin
     if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
+        // to use the same approach as in pe crossbar interface
         o_dram_data_o_valid <= 1'b0;
         internal_state <= RECEIVE_DATA;
     end
@@ -262,6 +283,7 @@ end
 
 always @(posedge i_clk) begin
     if (internal_state == RECEIVE_DATA & i_dram_data_i_valid & o_dram_data_i_ready) begin
+        // to use the same approach as in pe crossbar interface
         o_dram_data_i_ready <= 1'b0;
         internal_state <= NONE;
     end
@@ -274,22 +296,24 @@ always @(posedge i_clk) begin
 end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
+wire is_new_request_read = new_request == READ_REQ;
+
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
-        tag_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ & victim_indicator_i[i]);
+        tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | (state == FETCH_REQ & victim_indicator_i[i]);
         // anyway update even if there's no dirty victim
-        eviction_meta_info_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ);
+        eviction_meta_info_bank_sel[i] = is_new_request_fetch | is_new_request_read | (state == FETCH_REQ);
         dirty_bits_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ & victim_indicator_i[i]);
         // It's updated after data would be received
-        data_bank_sel[i] = is_new_request_fetch | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
+        data_bank_sel[i] = is_new_request_fetch | is_new_request_read | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
 
         eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
     end
 
-    tag_read_en = is_new_request_fetch;
-    eviction_meta_info_read_en = is_new_request_fetch;
+    tag_read_en = is_new_request_fetch | is_new_request_read;
+    eviction_meta_info_read_en = is_new_request_fetch | is_new_request_read;
     dirty_bits_read_en = is_new_request_fetch;
-    data_read_en = is_new_request_fetch;
+    data_read_en = is_new_request_fetch | is_new_request_read;
 
     for (int i = 0; i < WAYS; i++)
         for (int k = 0; k < SETS; k++) begin
@@ -336,7 +360,11 @@ always @(*) begin
 
     for (int i = 0; i < WAYS; i++)
         if (hit_i[i])
-            new_priority_set[i] = priority_set[i] + 1;
+            // WARNING!!
+            if (state == FETCH_REQ)
+                new_priority_set[i] = priority_set[i] + 1;
+            else
+                new_priority_set[i] = priority_set[i] - 1;
         else
             new_priority_set[i] = priority_set[i];
 end
@@ -347,7 +375,7 @@ always @(*) begin
             new_srrip_set_inc[i] = srrip_set[i];
         else
             new_srrip_set_inc[i] = srrip_set[i] + 1;
-
+        // WARNING: it's necessary to check the srrip update policy!!
         new_srrip_set_hit[i] = new_srrip_set_inc[i] & {SRRIP_BITS{~hit_i[i]}};
     end
 end
