@@ -13,33 +13,36 @@ module fiberBank #(
     //////////////////// PE CROSS BAR ////////////////////
 
     // request type
-    input   wire    [3:0] i_request_type,
-    input   wire    [ADDR_WIDTH-1:0] i_addr,
-    input   wire    i_type_valid,
-    output  wire    o_type_ready,
+    input   wire    [3:0]               i_request_type,
+    input   wire    [ADDR_WIDTH-1:0]    i_addr,
+    input   wire                        i_type_valid,
+    output  wire                        o_type_ready,
 
     // insert requests ports
-    input   wire    [DATA_WIDTH-1:0] i_data,
-    input   wire    i_data_i_valid,
-    output  wire    o_data_i_ready,
+    input   wire    [DATA_WIDTH-1:0]    i_data,
+
+    // assuming that i_type_valid_d is equal i_data_i_valid
+    // input   wire                        i_data_i_valid,
+    
+    output  wire                        o_data_i_ready,
 
     // read requests ports
-    output  reg    [DATA_WIDTH-1:0] o_pe_data_o,
-    output  reg    o_pe_data_o_valid,
-    input   wire    i_pe_data_o_ready,
+    output  reg     [DATA_WIDTH-1:0]    o_pe_data_o,
+    output  reg                         o_pe_data_o_valid,
+    input   wire                        i_pe_data_o_ready,
 
     //////////////////// DRAM CROSS BAR ////////////////////
-    output   reg    [ADDR_WIDTH-1:0] o_dram_addr,
+    output   reg    [ADDR_WIDTH-1:0]    o_dram_addr,
 
     // inbox requests ports
-    input   wire    [DATA_WIDTH-1:0] i_dram_data,
-    input   wire    i_dram_data_i_valid,
-    output  reg     o_dram_data_i_ready,
+    input   wire    [DATA_WIDTH-1:0]    i_dram_data,
+    input   wire                        i_dram_data_i_valid,
+    output  reg                         o_dram_data_i_ready,
 
     // outbox requests ports
-    output  wire    [DATA_WIDTH-1:0] o_dram_data_o,
-    output  reg     o_dram_data_o_valid,
-    input   wire    i_dram_data_o_ready
+    output  wire    [DATA_WIDTH-1:0]    o_dram_data_o,
+    output  reg                         o_dram_data_o_valid,
+    input   wire                        i_dram_data_o_ready
 );
 
 localparam FETCH_REQ    = 4'b0001;
@@ -47,9 +50,9 @@ localparam READ_REQ     = 4'b0010;
 localparam WRITE_REQ    = 4'b0100;
 localparam CONSUME_REQ  = 4'b1000;
 
-localparam SEND_DIRTY_VICTIM = 4'b0001;
-localparam RECEIVE_DATA = 4'b0010;
-localparam SEND_TO_PE = 4'b0100;
+localparam SEND_DIRTY_VICTIM    = 4'b0001;
+localparam RECEIVE_DATA         = 4'b0010;
+localparam SEND_TO_PE           = 4'b0100;
 
 localparam NONE             = 4'b0000;
 // localparam S_BUSY           = 4'b0001;
@@ -193,7 +196,7 @@ reg i_nreset_d;
 reg [3:0] i_request_type_d;
 reg [ADDR_WIDTH-1:0] i_addr_d;
 reg i_type_valid_d;
-// reg i_data_d;
+reg [DATA_WIDTH-1:0] i_data_d;
 // reg i_data_i_valid_d;
 // reg i_data_o_ready_d;
 
@@ -206,7 +209,7 @@ always @(posedge i_clk) begin
     i_request_type_d <= i_request_type;
     i_addr_d <= i_addr;
     i_type_valid_d <= i_type_valid;
-    // i_data_d <= i_data;
+    i_data_d <= i_data;
     // i_data_i_valid_d <= i_data_i_valid;
 end
 
@@ -215,6 +218,8 @@ assign o_type_ready = ~|state & ~|internal_state;
 wire [3:0] new_request = i_request_type_d & ({4{i_type_valid_d}} & {4{o_type_ready}});
 
 always @(posedge i_clk) begin
+    // WARNING: incorrect control reg obtained state
+    // TODO: use indicator of incoming state
     if (~|state)
         state <= new_request;
     else
@@ -297,6 +302,7 @@ end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
 wire is_new_request_read = new_request == READ_REQ;
+wire is_new_request_write = new_request == WRITE_REQ;
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
