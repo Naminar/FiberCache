@@ -23,7 +23,7 @@ module fiberBank #(
 
     // assuming that i_type_valid_d is equal i_data_i_valid
     // input   wire                        i_data_i_valid,
-    
+
     output  wire                        o_data_i_ready,
 
     // read requests ports
@@ -53,6 +53,7 @@ localparam CONSUME_REQ  = 4'b1000;
 localparam SEND_DIRTY_VICTIM    = 4'b0001;
 localparam RECEIVE_DATA         = 4'b0010;
 localparam SEND_TO_PE           = 4'b0100;
+localparam ONLY_SEND_DIRTY_VICTIM = 4'b1000;
 
 localparam NONE             = 4'b0000;
 // localparam S_BUSY           = 4'b0001;
@@ -227,6 +228,10 @@ always @(posedge i_clk) begin
             state <= NONE;
             internal_state <= SEND_DIRTY_VICTIM;
             set_to_write <= cur_set;
+        end else if (is_victim_dirty & state == WRITE_REQ) begin
+            state <= NONE;
+            internal_state <= ONLY_SEND_DIRTY_VICTIM;
+            set_to_write <= cur_set;
         end else if (miss & state == FETCH_REQ) begin
             internal_state <= RECEIVE_DATA;
             set_to_write <= cur_set;
@@ -269,12 +274,12 @@ end
 
 always @(*) begin
     o_pe_data_o = 0;
-    for (int i = 0; i < WAYS; i++) 
+    for (int i = 0; i < WAYS; i++)
         o_pe_data_o = o_pe_data_o | (data_set[i] & {DATA_WIDTH{hit_i[i]}});
 end
 
 always @(posedge i_clk) begin
-    if (i_pe_data_o_ready) 
+    if (i_pe_data_o_ready)
         internal_state <= NONE;
 end
 
@@ -295,7 +300,7 @@ always @(posedge i_clk) begin
 end
 
 always @(posedge i_clk) begin
-    if (miss & state == FETCH_REQ)
+    if (miss & (state == FETCH_REQ | state == WRITE_REQ))
         for (int i = 0; i < WAYS; i++)
             insert_data_handler[i] = victim_indicator_i[i];
 end
@@ -306,20 +311,21 @@ wire is_new_request_write = new_request == WRITE_REQ;
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
-        tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | (state == FETCH_REQ & victim_indicator_i[i]);
+        tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
         // anyway update even if there's no dirty victim
-        eviction_meta_info_bank_sel[i] = is_new_request_fetch | is_new_request_read | (state == FETCH_REQ);
-        dirty_bits_bank_sel[i] = is_new_request_fetch | (state == FETCH_REQ & victim_indicator_i[i]);
+        eviction_meta_info_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & victim_indicator_i[i]) |(state == FETCH_REQ);
+        // TODO: modifyspecial for
+        dirty_bits_bank_sel[i] = is_new_request_fetch | is_new_request_write | (state == WRITE_REQ & hit_i[i]) | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
         // It's updated after data would be received
-        data_bank_sel[i] = is_new_request_fetch | is_new_request_read | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
+        data_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & (hit_i[i] | victim_indicator_i[i])) | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
 
         eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
     end
 
-    tag_read_en = is_new_request_fetch | is_new_request_read;
-    eviction_meta_info_read_en = is_new_request_fetch | is_new_request_read;
-    dirty_bits_read_en = is_new_request_fetch;
-    data_read_en = is_new_request_fetch | is_new_request_read;
+    tag_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
+    eviction_meta_info_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
+    dirty_bits_read_en = is_new_request_fetch | is_new_request_write;
+    data_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
 
     for (int i = 0; i < WAYS; i++)
         for (int k = 0; k < SETS; k++) begin
@@ -332,25 +338,34 @@ always @(*) begin
         end
 
     for (int i = 0; i < WAYS; i++) begin
-        valid_bits_read_en[cur_set][i] = is_new_request_fetch;
+        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_write;
         valid_bits_write_en[cur_set][i] = victim_indicator_i[i];
         // TODO: | (state == FETCH_REQ & is_victim_dirty)
     end
 
-    tag_write_en = state == FETCH_REQ;
-    dirty_bits_write_en = state == FETCH_REQ;
+    tag_write_en = (state == FETCH_REQ | state == WRITE_REQ);
+    dirty_bits_write_en = (state == FETCH_REQ) | (state == WRITE_REQ);
 
     tag_write_data = cur_tag;
-    dirty_bits_write_data = 1'b0;
+
+    // dirty_bits_write_data = 1'b0;
+    dirty_bits_write_data = state == WRITE_REQ;
+    // if (state == WRITE_REQ)
+    //     dirty_bits_write_data = 1'b1;
+    // else
+    //     dirty_bits_write_data = 1'b0;
 
     data_write_en = i_dram_data_i_valid & o_dram_data_i_ready;
     data_write_data = i_dram_data;
-
 end
 
 reg [WAYS-1:0] hit_i;
 reg hit;
+
+/* verilator lint_off UNOPTFLAT */
 reg miss;
+/* verilator lint_on UNOPTFLAT */
+
 reg [PRIORITY_BITS-1:0] new_priority_set [WAYS-1:0];
 reg [SRRIP_BITS-1:0] new_srrip_set_inc [WAYS-1:0];
 reg [SRRIP_BITS-1:0] new_srrip_set_hit [WAYS-1:0];
@@ -369,10 +384,16 @@ always @(*) begin
             // WARNING!!
             if (state == FETCH_REQ)
                 new_priority_set[i] = priority_set[i] + 1;
-            else
+            else if (state == READ_REQ)
                 new_priority_set[i] = priority_set[i] - 1;
-        else
-            new_priority_set[i] = priority_set[i];
+            else
+                new_priority_set[i] = priority_set[i];
+        else begin
+            if (state == WRITE_REQ & miss)
+                new_priority_set[i] = {PRIORITY_BITS{~victim_indicator_i[i]}};    
+            else 
+                new_priority_set[i] = priority_set[i];
+        end
 end
 
 always @(*) begin
@@ -430,10 +451,17 @@ end
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++)
-        if (hit)
-            new_srrip_set[i] = new_srrip_set_hit[i];
-        else
-            new_srrip_set[i] = new_srrip_set_miss[i];
+        if (state == WRITE_REQ) begin
+            if (hit)
+                new_srrip_set[i] = srrip_set[i];
+            else
+                new_srrip_set[i] = srrip_set[i] & {SRRIP_BITS{~victim_indicator_i[i]}};
+        end else begin 
+            if (hit)
+                new_srrip_set[i] = new_srrip_set_hit[i];
+            else
+                new_srrip_set[i] = new_srrip_set_miss[i];
+        end
 end
 
 reg is_victim_dirty;
