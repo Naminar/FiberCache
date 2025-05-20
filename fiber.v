@@ -24,7 +24,7 @@ module fiberBank #(
     // assuming that i_type_valid_d is equal i_data_i_valid
     // input   wire                        i_data_i_valid,
 
-    output  wire                        o_data_i_ready,
+    // output  wire                        o_data_i_ready,
 
     // read requests ports
     output  reg     [DATA_WIDTH-1:0]    o_pe_data_o,
@@ -41,7 +41,7 @@ module fiberBank #(
 
     // outbox requests ports
     output  wire    [DATA_WIDTH-1:0]    o_dram_data_o,
-    output  reg                         o_dram_data_o_valid,
+    output  wire                        o_dram_data_o_valid,
     input   wire                        i_dram_data_o_ready
 );
 
@@ -267,7 +267,7 @@ end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
 always @(posedge i_clk) begin
-    if (state == READ_REQ) begin
+    if (state == READ_REQ | state == CONSUME_REQ) begin
         internal_state <= SEND_TO_PE;
     end
 end
@@ -279,22 +279,23 @@ always @(*) begin
 end
 
 always @(posedge i_clk) begin
-    if (i_pe_data_o_ready)
+    if (i_pe_data_o_ready & o_pe_data_o_valid)
         internal_state <= NONE;
 end
 
 
+assign o_dram_data_o_valid = (internal_state == SEND_DIRTY_VICTIM) | (internal_state == ONLY_SEND_DIRTY_VICTIM);
 
 always @(posedge i_clk) begin
     if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
         // to use the same approach as in pe crossbar interface
-        o_dram_data_o_valid <= 1'b0;
+        // o_dram_data_o_valid <= 1'b0;
         internal_state <= RECEIVE_DATA;
     end
 
     if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
         // to use the same approach as in pe crossbar interface
-        o_dram_data_o_valid <= 1'b0;
+        // o_dram_data_o_valid <= 1'b0;
         internal_state <= NONE;
     end
 end
@@ -316,24 +317,25 @@ end
 wire is_new_request_fetch = new_request == FETCH_REQ;
 wire is_new_request_read = new_request == READ_REQ;
 wire is_new_request_write = new_request == WRITE_REQ;
+wire is_new_request_consume = new_request == CONSUME_REQ;
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
-        tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
+        tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
         // anyway update even if there's no dirty victim
         eviction_meta_info_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & victim_indicator_i[i]) |(state == FETCH_REQ);
         // TODO: modifyspecial for
         dirty_bits_bank_sel[i] = is_new_request_fetch | is_new_request_write | (state == WRITE_REQ & hit_i[i]) | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
         // It's updated after data would be received
-        data_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & (hit_i[i] | victim_indicator_i[i])) | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
+        data_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume | (state == WRITE_REQ & (hit_i[i] | victim_indicator_i[i])) | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
 
         eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
     end
 
-    tag_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
+    tag_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume;
     eviction_meta_info_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
     dirty_bits_read_en = is_new_request_fetch | is_new_request_write;
-    data_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write;
+    data_read_en = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume;
 
     for (int i = 0; i < WAYS; i++)
         for (int k = 0; k < SETS; k++) begin
@@ -346,7 +348,7 @@ always @(*) begin
         end
 
     for (int i = 0; i < WAYS; i++) begin
-        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_write;
+        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_write  | is_new_request_consume;
         valid_bits_write_en[cur_set][i] = victim_indicator_i[i];
         // TODO: | (state == FETCH_REQ & is_victim_dirty)
     end
