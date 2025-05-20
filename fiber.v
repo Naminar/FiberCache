@@ -343,13 +343,16 @@ always @(*) begin
             valid_bits_read_en[k][i] = 1'b0;
             valid_bits_write_en[k][i] = 1'b0;
 
-            valid_bits_write_data[k][i] = 1'b1;
+            valid_bits_write_data[k][i] = 1'b1 & ~(state == CONSUME_REQ & hit_i[i]);
             // TODO: enable bank!!!!
         end
 
     for (int i = 0; i < WAYS; i++) begin
         valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_write  | is_new_request_consume;
-        valid_bits_write_en[cur_set][i] = victim_indicator_i[i];
+
+        //WARNING: it may have to change the logic of valid bits write access
+        //STAGES: WRITE_REQ AND FETCH_REG
+        valid_bits_write_en[cur_set][i] = victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i]);
         // TODO: | (state == FETCH_REQ & is_victim_dirty)
     end
 
