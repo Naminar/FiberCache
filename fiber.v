@@ -346,7 +346,7 @@ always @(*) begin
         for (int k = 0; k < SETS; k++) begin
             // valid_bits_read_en[k][i] = (k == cur_set) & is_new_request_fetch;
             valid_bits_read_en[k][i] = 1'b0;
-            valid_bits_write_en[k][i] = 1'b0 & ~i_nreset;
+            valid_bits_write_en[k][i] = 1'b0 | ~i_nreset;
 
             valid_bits_write_data[k][i] = 1'b1 & ~(state == CONSUME_REQ & hit_i[i]) & i_nreset;
             // TODO: enable bank!!!!
