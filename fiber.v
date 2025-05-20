@@ -40,7 +40,7 @@ module fiberBank #(
     output  wire                        o_dram_data_i_ready,
 
     // outbox requests ports
-    output  wire    [DATA_WIDTH-1:0]    o_dram_data_o,
+    output  reg    [DATA_WIDTH-1:0]     o_dram_data_o,
     output  wire                        o_dram_data_o_valid,
     input   wire                        i_dram_data_o_ready
 );
