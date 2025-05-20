@@ -37,7 +37,7 @@ module fiberBank #(
     // inbox requests ports
     input   wire    [DATA_WIDTH-1:0]    i_dram_data,
     input   wire                        i_dram_data_i_valid,
-    output  reg                         o_dram_data_i_ready,
+    output  wire                        o_dram_data_i_ready,
 
     // outbox requests ports
     output  wire    [DATA_WIDTH-1:0]    o_dram_data_o,
@@ -50,10 +50,10 @@ localparam READ_REQ     = 4'b0010;
 localparam WRITE_REQ    = 4'b0100;
 localparam CONSUME_REQ  = 4'b1000;
 
-localparam SEND_DIRTY_VICTIM    = 4'b0001;
-localparam RECEIVE_DATA         = 4'b0010;
-localparam SEND_TO_PE           = 4'b0100;
-localparam ONLY_SEND_DIRTY_VICTIM = 4'b1000;
+localparam SEND_DIRTY_VICTIM        = 4'b0001;
+localparam RECEIVE_DATA             = 4'b0010;
+localparam SEND_TO_PE               = 4'b0100;
+localparam ONLY_SEND_DIRTY_VICTIM   = 4'b1000;
 
 localparam NONE             = 4'b0000;
 // localparam S_BUSY           = 4'b0001;
@@ -105,7 +105,7 @@ wire valid_bits_field        [SETS-1:0][WAYS-1:0];
 reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
 reg  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
 reg  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
-reg valid_bits_write_data   [SETS-1:0][WAYS-1:0];
+reg  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
 genvar i, k;
@@ -193,7 +193,7 @@ generate
     end
 endgenerate
 
-reg i_nreset_d;
+// reg i_nreset_d;
 reg [3:0] i_request_type_d;
 reg [ADDR_WIDTH-1:0] i_addr_d;
 reg i_type_valid_d;
@@ -206,7 +206,7 @@ reg [3:0] internal_state;
 reg [WAYS-1:0] insert_data_handler;
 
 always @(posedge i_clk) begin
-    i_nreset_d <= i_nreset;
+    // i_nreset_d <= i_nreset;
     i_request_type_d <= i_request_type;
     i_addr_d <= i_addr;
     i_type_valid_d <= i_type_valid;
@@ -216,26 +216,30 @@ end
 
 assign o_type_ready = ~|state & ~|internal_state;
 
-wire [3:0] new_request = i_request_type_d & ({4{i_type_valid_d}} & {4{o_type_ready}});
+wire [3:0] nreset_line = {4{i_nreset}};
+
+wire [3:0] new_request = i_request_type_d & ({4{i_type_valid_d}} & {4{o_type_ready}} & nreset_line);
 
 always @(posedge i_clk) begin
     // WARNING: incorrect control reg obtained state
     // TODO: use indicator of incoming state
     if (~|state)
         state <= new_request;
-    else
+    else begin
         if (is_victim_dirty & state == FETCH_REQ) begin
             state <= NONE;
-            internal_state <= SEND_DIRTY_VICTIM;
+            internal_state <= nreset_line & SEND_DIRTY_VICTIM;
             set_to_write <= cur_set;
         end else if (is_victim_dirty & state == WRITE_REQ) begin
             state <= NONE;
-            internal_state <= ONLY_SEND_DIRTY_VICTIM;
+            internal_state <= nreset_line & ONLY_SEND_DIRTY_VICTIM;
             set_to_write <= cur_set;
         end else if (miss & state == FETCH_REQ) begin
-            internal_state <= RECEIVE_DATA;
+            internal_state <= nreset_line & RECEIVE_DATA;
             set_to_write <= cur_set;
-        end
+        end else if (~i_nreset)
+            internal_state <= nreset_line;
+    end
 end
 
 reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
@@ -253,22 +257,22 @@ always @(*) begin
 
 end
 
-always @(posedge i_clk) begin
-    if (internal_state == SEND_DIRTY_VICTIM | internal_state == ONLY_SEND_DIRTY_VICTIM) begin
-        // o_dram_addr <= 0; // TODO: recreate addr to send dirty data;
-        // o_dram_data_o <= ; // maybe without register???
-        o_dram_data_o_valid <= 1'b1;
-    end
-    else if (internal_state == RECEIVE_DATA) begin
-        // o_dram_addr <= i_addr_d; // maybe without register???
-        o_dram_data_i_ready <= 1'b1;
-    end
-end
+// always @(posedge i_clk) begin
+//     if (internal_state == SEND_DIRTY_VICTIM | internal_state == ONLY_SEND_DIRTY_VICTIM) begin
+//         // o_dram_addr <= 0; // TODO: recreate addr to send dirty data;
+//         // o_dram_data_o <= ; // maybe without register???
+//         o_dram_data_o_valid <= 1'b1;
+//     end
+//     else if (internal_state == RECEIVE_DATA) begin
+//         // o_dram_addr <= i_addr_d; // maybe without register???
+//         o_dram_data_i_ready <= 1'b1;
+//     end
+// end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
 always @(posedge i_clk) begin
-    if (state == READ_REQ | state == CONSUME_REQ) begin
-        internal_state <= SEND_TO_PE;
+    if (state == READ_REQ | state == CONSUME_REQ | ~i_nreset) begin
+        internal_state <= nreset_line & SEND_TO_PE;
     end
 end
 
@@ -287,10 +291,10 @@ end
 assign o_dram_data_o_valid = (internal_state == SEND_DIRTY_VICTIM) | (internal_state == ONLY_SEND_DIRTY_VICTIM);
 
 always @(posedge i_clk) begin
-    if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
+    if ((internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) | ~i_nreset) begin
         // to use the same approach as in pe crossbar interface
         // o_dram_data_o_valid <= 1'b0;
-        internal_state <= RECEIVE_DATA;
+        internal_state <= nreset_line & RECEIVE_DATA;
     end
 
     if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
@@ -300,10 +304,11 @@ always @(posedge i_clk) begin
     end
 end
 
+assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
 always @(posedge i_clk) begin
     if (internal_state == RECEIVE_DATA & i_dram_data_i_valid & o_dram_data_i_ready) begin
         // to use the same approach as in pe crossbar interface
-        o_dram_data_i_ready <= 1'b0;
+        // o_dram_data_i_ready <= 1'b0;
         internal_state <= NONE;
     end
 end
@@ -341,9 +346,9 @@ always @(*) begin
         for (int k = 0; k < SETS; k++) begin
             // valid_bits_read_en[k][i] = (k == cur_set) & is_new_request_fetch;
             valid_bits_read_en[k][i] = 1'b0;
-            valid_bits_write_en[k][i] = 1'b0;
+            valid_bits_write_en[k][i] = 1'b0 & ~i_nreset;
 
-            valid_bits_write_data[k][i] = 1'b1 & ~(state == CONSUME_REQ & hit_i[i]);
+            valid_bits_write_data[k][i] = 1'b1 & ~(state == CONSUME_REQ & hit_i[i]) & i_nreset;
             // TODO: enable bank!!!!
         end
 
@@ -352,7 +357,7 @@ always @(*) begin
 
         //WARNING: it may have to change the logic of valid bits write access
         //STAGES: WRITE_REQ AND FETCH_REG
-        valid_bits_write_en[cur_set][i] = victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i]);
+        valid_bits_write_en[cur_set][i] = (victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
         // TODO: | (state == FETCH_REQ & is_victim_dirty)
     end
 
@@ -403,8 +408,8 @@ always @(*) begin
                 new_priority_set[i] = priority_set[i];
         else begin
             if (state == WRITE_REQ & miss)
-                new_priority_set[i] = {PRIORITY_BITS{~victim_indicator_i[i]}};    
-            else 
+                new_priority_set[i] = {PRIORITY_BITS{~victim_indicator_i[i]}};
+            else
                 new_priority_set[i] = priority_set[i];
         end
 end
@@ -469,7 +474,7 @@ always @(*) begin
                 new_srrip_set[i] = srrip_set[i];
             else
                 new_srrip_set[i] = srrip_set[i] & {SRRIP_BITS{~victim_indicator_i[i]}};
-        end else begin 
+        end else begin
             if (hit)
                 new_srrip_set[i] = new_srrip_set_hit[i];
             else
