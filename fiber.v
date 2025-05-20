@@ -254,7 +254,7 @@ always @(*) begin
 end
 
 always @(posedge i_clk) begin
-    if (internal_state == SEND_DIRTY_VICTIM) begin
+    if (internal_state == SEND_DIRTY_VICTIM | internal_state == ONLY_SEND_DIRTY_VICTIM) begin
         // o_dram_addr <= 0; // TODO: recreate addr to send dirty data;
         // o_dram_data_o <= ; // maybe without register???
         o_dram_data_o_valid <= 1'b1;
@@ -283,11 +283,19 @@ always @(posedge i_clk) begin
         internal_state <= NONE;
 end
 
+
+
 always @(posedge i_clk) begin
     if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
         // to use the same approach as in pe crossbar interface
         o_dram_data_o_valid <= 1'b0;
         internal_state <= RECEIVE_DATA;
+    end
+
+    if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
+        // to use the same approach as in pe crossbar interface
+        o_dram_data_o_valid <= 1'b0;
+        internal_state <= NONE;
     end
 end
 
