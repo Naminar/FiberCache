@@ -276,24 +276,18 @@ end
 assign o_dram_data_o_valid = (internal_state == SEND_DIRTY_VICTIM) | (internal_state == ONLY_SEND_DIRTY_VICTIM);
 
 always @(posedge i_clk) begin
-    if ((internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) | ~i_nreset) begin
-        // to use the same approach as in pe crossbar interface
-        // o_dram_data_o_valid <= 1'b0;
+    if ((internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready) | ~i_nreset) begin
         internal_state <= nreset_line & RECEIVE_DATA;
     end
 
-    if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready & o_dram_data_o_valid) begin
-        // to use the same approach as in pe crossbar interface
-        // o_dram_data_o_valid <= 1'b0;
+    if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready) begin
         internal_state <= NONE;
     end
 end
 
 assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
 always @(posedge i_clk) begin
-    if (internal_state == RECEIVE_DATA & i_dram_data_i_valid & o_dram_data_i_ready) begin
-        // to use the same approach as in pe crossbar interface
-        // o_dram_data_i_ready <= 1'b0;
+    if (internal_state == RECEIVE_DATA & i_dram_data_i_valid) begin
         internal_state <= NONE;
     end
 end
@@ -358,8 +352,8 @@ always @(*) begin
     tag_write_en = (state == FETCH_REQ); // | state == WRITE_REQ);
     dirty_bits_write_en = (state == FETCH_REQ); // | (state == WRITE_REQ);
 
-    // CAUTION
-    data_write_en = //i_dram_data_i_valid & o_dram_data_i_ready;
+    // CAUTION (for fetch done)
+    data_write_en = i_dram_data_i_valid & o_dram_data_i_ready;
 
     // CAUTION
     eviction_meta_info_write_en = (state == FETCH_REQ);
@@ -417,12 +411,14 @@ always @(*) begin
             else
                 new_priority_set[i] = priority_set[i];
         end 
-        else begin
+        else if (victim_indicator_i[i]) begin
+            new_priority_set[i] = {{PRIORITY_BITS-1{1'b0}}, 1'b1};
             // if (state == WRITE_REQ & miss)
             //     new_priority_set[i] = {PRIORITY_BITS{~victim_indicator_i[i]}};
             // else
-                new_priority_set[i] = priority_set[i];
-        end
+                // new_priority_set[i] = priority_set[i];
+        end else
+            new_priority_set[i] = priority_set[i];
 end
 
 always @(*) begin
@@ -469,9 +465,40 @@ always @(*) begin
     end
 end
 
+reg [WAYS-1:0] invalid_bits_line;
+wire is_smth_invalid = |invalid_bits_line;
+
+int first_invalid; 
+always @(*) begin
+    first_invalid = 0;
+
+    for (int i = 0; i < WAYS; i++) begin
+        invalid_bits_line[i] = ~valid_bits_set[cur_set][i];
+        if (invalid_bits_line[i] && first_invalid == 0)
+            first_invalid = i + 1;
+    end
+end
+
+reg is_victim_dirty;
+reg [WAYS-1:0] is_victim_dirty_i;
+reg [WAYS-1:0] victim_indicator_i;
+always @(*) begin
+    for (int i = 0; i < WAYS; i++)
+        if (is_smth_invalid)
+            victim_indicator_i[i] = (i == (first_invalid-1));
+        else
+            victim_indicator_i[i] = (max_srrip_indicator[i]);
+            // CAUTION
+            //?? victim_indicator_i[i] = (miss & max_srrip_indicator[i]);
+
+    for (int i = 0; i < WAYS; i++)
+        is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i] & valid_bits_set[cur_set][i];
+    is_victim_dirty = |is_victim_dirty_i;
+end
+
 always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
-        if (max_srrip_indicator[i])
+        if (victim_indicator_i[i])
             new_srrip_set_miss[i] = {{SRRIP_BITS-1{1'b1}}, 1'b0};
         else
             new_srrip_set_miss[i] = new_srrip_set_inc[i];
@@ -480,28 +507,35 @@ end
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++)
-        if (state == WRITE_REQ) begin
-            if (hit)
-                new_srrip_set[i] = srrip_set[i];
-            else
-                new_srrip_set[i] = srrip_set[i] & {SRRIP_BITS{~victim_indicator_i[i]}};
-        end else begin
-            if (hit)
-                new_srrip_set[i] = new_srrip_set_hit[i];
-            else
-                new_srrip_set[i] = new_srrip_set_miss[i];
-        end
+        if (hit)
+            new_srrip_set[i] = new_srrip_set_hit[i];
+        else
+            new_srrip_set[i] = new_srrip_set_miss[i];
 end
 
-reg is_victim_dirty;
-reg [WAYS-1:0] is_victim_dirty_i;
-reg [WAYS-1:0] victim_indicator_i;
-always @(*) begin
-    for (int i = 0; i < WAYS; i++)
-        victim_indicator_i[i] = miss & max_srrip_indicator[i];
+reg dirty_data;
+reg dirty_addr;
 
-    for (int i = 0; i < WAYS; i++)
-        is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i];
-    is_victim_dirty = |is_victim_dirty_i;
+always @(posedge i_clk) begin
+    if (is_victim_dirty) begin // | miss
+        dirty_data <=; 
+        dirty_addr <=;
+    end
 end
+
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++)
+//         if (state == WRITE_REQ) begin
+//             if (hit)
+//                 new_srrip_set[i] = srrip_set[i];
+//             else
+//                 new_srrip_set[i] = srrip_set[i] & {SRRIP_BITS{~victim_indicator_i[i]}};
+//         end else begin
+//             if (hit)
+//                 new_srrip_set[i] = new_srrip_set_hit[i];
+//             else
+//                 new_srrip_set[i] = new_srrip_set_miss[i];
+//         end
+// end
+
 endmodule
