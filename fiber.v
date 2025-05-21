@@ -60,7 +60,7 @@ localparam NONE                     = 4'b0000;
 //-----------------------------------------------------------
 //=============================================================================
 wire [$clog2(SETS)-1:0] cur_set = i_addr_d[$clog2(DATA_WIDTH) +: $clog2(SETS)];
-wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = i_addr_d[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
+wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = internal_addr[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
 wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0];
 
 
@@ -229,7 +229,7 @@ end
 always @(posedge i_clk) begin
     if (~i_nreset)
         internal_state <= NONE;
-    else if (is_victim_dirty & state == FETCH_REQ)
+    else if (miss & is_victim_dirty & state == FETCH_REQ)
         internal_state <= SEND_DIRTY_VICTIM;
     else if (is_victim_dirty & state == WRITE_REQ)
         internal_state <= ONLY_SEND_DIRTY_VICTIM;
@@ -240,19 +240,6 @@ always @(posedge i_clk) begin
 end
 
 reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
-
-always @(*) begin
-    o_dram_addr = i_addr_d;
-    for (int i = 0; i < WAYS; i++) begin
-       victim_data_i[i] = data_set[i] & {DATA_WIDTH{is_victim_dirty_i[i]}};
-    end
-
-    // TODO: o_dram_data_o
-    o_dram_data_o = 0;
-    for (int i = 0; i < WAYS; i++)
-        o_dram_data_o = o_dram_data_o | victim_data_i[i];
-
-end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
 always @(posedge i_clk) begin
@@ -293,7 +280,8 @@ always @(posedge i_clk) begin
 end
 
 always @(posedge i_clk) begin
-    if (miss & (state == FETCH_REQ | state == WRITE_REQ))
+    // if (miss & (state == FETCH_REQ | state == WRITE_REQ))
+    if (miss & is_victim_dirty & state == FETCH_REQ)
         for (int i = 0; i < WAYS; i++)
             insert_data_handler[i] = victim_indicator_i[i];
 end
@@ -318,10 +306,10 @@ always @(*) begin
 
     //////////////////// SEL PORTS SIGNING ////////////////////
     for (int i = 0; i < WAYS; i++) begin
-        tag_bank_sel[i]                 = is_new_request_fetch;
-        data_bank_sel[i]                = is_new_request_fetch;
-        eviction_meta_info_bank_sel[i]  = is_new_request_fetch;
-        dirty_bits_bank_sel[i]          = is_new_request_fetch;
+        tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i]);
+        data_bank_sel[i]                = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[i]);
+        eviction_meta_info_bank_sel[i]  = is_new_request_fetch | (state == FETCH_REQ);
+        dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i]);
     end
     //////////////////// END SEL PORTS SIGNING ////////////////////
 
@@ -337,7 +325,7 @@ always @(*) begin
 
     for (int i = 0; i < WAYS; i++) begin
         valid_bits_read_en[cur_set][i] = is_new_request_fetch; // | is_new_request_write  | is_new_request_consume;
-        valid_bits_write_en[cur_set][i] = ;//(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
+        valid_bits_write_en[cur_set][i] = i_nreset & (miss & state == FETCH_REQ & victim_indicator_i[i]);//(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
     end
     //////////////////// END VALID BITS SIGNING ////////////////////
 
@@ -349,29 +337,25 @@ always @(*) begin
     //////////////////// END READ ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE ENABLE SIGNING ////////////////////
-    tag_write_en = (state == FETCH_REQ); // | state == WRITE_REQ);
-    dirty_bits_write_en = (state == FETCH_REQ); // | (state == WRITE_REQ);
-
-    // CAUTION (for fetch done)
+    tag_write_en = (miss & state == FETCH_REQ); // | state == WRITE_REQ);
+    // CAUTION (for fetch stage is done)
     data_write_en = i_dram_data_i_valid & o_dram_data_i_ready;
-
     // CAUTION
     eviction_meta_info_write_en = (state == FETCH_REQ);
+    dirty_bits_write_en = (miss & state == FETCH_REQ); // | (state == WRITE_REQ);
+
     //////////////////// END WRITE ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE DATA SIGNING ////////////////////
     for (int i = 0; i < WAYS; i++) begin
         eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
     end
-
     // CAUTION
-    // tag_write_data = cur_tag;
-
+    tag_write_data = cur_tag;
     // CAUTION
-    // dirty_bits_write_data = state == WRITE_REQ;
-    
+    dirty_bits_write_data = state == WRITE_REQ;
     // CAUTION
-    // data_write_data = i_dram_data;
+    data_write_data = i_dram_data;
     //////////////////// END WRITE DATA SIGNING ////////////////////
 end
 
@@ -513,14 +497,36 @@ always @(*) begin
             new_srrip_set[i] = new_srrip_set_miss[i];
 end
 
-reg dirty_data;
-reg dirty_addr;
+reg [DATA_WIDTH-1:0] dirty_data;
+reg [ADDR_WIDTH-1:0] dirty_addr;
+
+reg [DATA_WIDTH-1:0] dirty_data_comb;
+reg [ADDR_WIDTH-1:0] dirty_addr_comb;
+
+always @(*) begin
+    dirty_data_comb = 0;
+    dirty_addr_comb = 0;
+
+    for (int i = 0; i < WAYS; i++) begin
+        dirty_data_comb = dirty_data_comb | (data_set[i] & {DATA_WIDTH{victim_indicator_i[i]}});
+        dirty_addr_comb = dirty_addr_comb | {tag_set[i] & {ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH){victim_indicator_i[i]}}, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
+    end
+end
 
 always @(posedge i_clk) begin
-    if (is_victim_dirty) begin // | miss
-        dirty_data <=; 
-        dirty_addr <=;
+    if (miss & is_victim_dirty & state == FETCH_REQ) begin // | miss
+        dirty_data <= dirty_data_comb; 
+        dirty_addr <= dirty_addr_comb;
     end
+end
+
+// CAUTION
+always @(*) begin
+    o_dram_data_o = dirty_data;
+    o_dram_addr = dirty_addr;
+    
+    if (internal_state == RECEIVE_DATA)
+        o_dram_addr = internal_addr;
 end
 
 // always @(*) begin
