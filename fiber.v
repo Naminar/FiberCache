@@ -245,7 +245,7 @@ always @(posedge i_clk) begin
         internal_state <= NONE;
     else if (miss & is_victim_dirty & state == FETCH_REQ)
         internal_state <= SEND_DIRTY_VICTIM;
-    else if (is_victim_dirty & state == WRITE_REQ)
+    else if (miss & is_victim_dirty & state == WRITE_REQ)
         internal_state <= ONLY_SEND_DIRTY_VICTIM;
     else if (miss & state == FETCH_REQ)
         internal_state <= RECEIVE_DATA;
@@ -283,9 +283,24 @@ assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
 
 always @(posedge i_clk) begin
     // if (miss & (state == FETCH_REQ | state == WRITE_REQ))
-    if (miss & state == FETCH_REQ)
-        for (int i = 0; i < WAYS; i++)
+    
+    for (int i = 0; i < WAYS; i++)
+        if (miss & state == FETCH_REQ)
             insert_data_handler[i] = victim_indicator_i[i];
+        // else if (state == WRITE_REQ)
+        //     if (miss)
+        //         insert_data_handler[i] = victim_indicator_i[i];
+        //     else if (hit)
+        //         insert_data_handler[i] = hit_i[i];
+end
+
+
+reg [WAYS-1:0] where_to_write_while_write_stage;
+always @(*) begin
+    if (hit)
+        where_to_write_while_write_stage[i] = hit_i[i];
+    else
+        where_to_write_while_write_stage[i] = victim_indicator_i[i];
 end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
@@ -310,14 +325,18 @@ always @(*) begin
     for (int i = 0; i < WAYS; i++) begin
         tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
                                           | is_new_request_read
-                                          | is_new_request_consume;
+                                          | is_new_request_consume
+                                          | is_new_request_write | (miss & state == WRITE_REQ & victim_indicator_i[i]);
         data_bank_sel[i]                = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[i])
                                           | is_new_request_read
-                                          | is_new_request_consume;
+                                          | is_new_request_consume
+                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
         eviction_meta_info_bank_sel[i]  = is_new_request_fetch      | (state == FETCH_REQ)
                                           | is_new_request_read     | (state == READ_REQ)
-                                          | is_new_request_consume  | (state == CONSUME_REQ);
-        dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i]);
+                                          | is_new_request_consume  | (state == CONSUME_REQ)
+                                          | is_new_request_write    | (state == WRITE_REQ);
+        dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
+                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
     end
     //////////////////// END SEL PORTS SIGNING ////////////////////
 
@@ -333,25 +352,25 @@ always @(*) begin
     end
 
     for (int i = 0; i < WAYS; i++) begin
-        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read | is_new_request_consume; // | is_new_request_write  | is_new_request_consume;
-        valid_bits_write_en[cur_set][i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[i]) | (state == CONSUME_REQ & hit_i[i]));//(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
+        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write; // | is_new_request_write  | is_new_request_consume;
+        valid_bits_write_en[cur_set][i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[i]) | (state == CONSUME_REQ & hit_i[i]) | (state == WRITE_REQ & where_to_write_while_write_stage[i])); //(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
     end
     //////////////////// END VALID BITS SIGNING ////////////////////
 
     //////////////////// READ ENABLE SIGNING ////////////////////
-    tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write;
-    dirty_bits_read_en          = is_new_request_fetch;// | is_new_request_write;
+    tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
+    dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;// | is_new_request_write;
     //////////////////// END READ ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE ENABLE SIGNING ////////////////////
-    tag_write_en = (miss & state == FETCH_REQ); // | state == WRITE_REQ);
+    tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ); // | state == WRITE_REQ);
     // CAUTION (for fetch stage is done)
-    data_write_en = i_dram_data_i_valid & o_dram_data_i_ready;
+    data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
     // CAUTION
-    eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ);
-    dirty_bits_write_en = (miss & state == FETCH_REQ); // | (state == WRITE_REQ);
+    eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ) | (state == WRITE_REQ);
+    dirty_bits_write_en = (miss & state == FETCH_REQ) | (state == WRITE_REQ);
     //////////////////// END WRITE ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE DATA SIGNING ////////////////////
@@ -362,8 +381,12 @@ always @(*) begin
     tag_write_data = cur_tag;
     // CAUTION
     dirty_bits_write_data = state == WRITE_REQ;
+
     // CAUTION
-    data_write_data = i_dram_data;
+    if (internal_state == RECEIVE_DATA)
+        data_write_data = i_dram_data;
+    else
+        data_write_data = internal_data;
     //////////////////// END WRITE DATA SIGNING ////////////////////
 end
 
@@ -399,9 +422,12 @@ always @(*) begin
                 new_priority_set[i] = priority_set[i] + 1;
             else if (state == READ_REQ)
                 new_priority_set[i] = priority_set[i] - 1;
+            // else if (state == WRITE_REQ)
+            //     new_priority_set[i] = {{PRIORITY_BITS-1{1'b0}}, 1'b1};
             else
                 new_priority_set[i] = priority_set[i];
         end
+        // else if (miss & victim_indicator_i[i] & (state == FETCH_REQ | state == WRITE_REQ)) begin
         else if (miss & victim_indicator_i[i] & state == FETCH_REQ) begin
         // else if (victim_indicator_i[i]) begin
             new_priority_set[i] = {{PRIORITY_BITS-1{1'b0}}, 1'b1};
@@ -522,7 +548,7 @@ always @(*) begin
 end
 
 always @(posedge i_clk) begin
-    if (miss & is_victim_dirty & state == FETCH_REQ) begin // | miss
+    if (miss & is_victim_dirty & (state == FETCH_REQ | state == WRITE_REQ)) begin // | miss
         dirty_data <= dirty_data_comb;
         dirty_addr <= dirty_addr_comb;
     end
