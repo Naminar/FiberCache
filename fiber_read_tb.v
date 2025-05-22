@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module fiber_tb;
+module fiber_read_tb;
 
     // Parameters
     localparam DATA_WIDTH=16; // double + 2 * i32
@@ -9,6 +9,11 @@ module fiber_tb;
     localparam ADDR_WIDTH = 64; // 64 bit address
     localparam SRRIP_BITS=2;
     localparam PRIORITY_BITS=5;
+
+    localparam FETCH_REQ    = 4'b0001;
+    localparam READ_REQ     = 4'b0010;
+    localparam WRITE_REQ    = 4'b0100;
+    localparam CONSUME_REQ  = 4'b1000;
 
     //////////////////// GLOBAL TREE SIGNAL ////////////////////
     reg i_clk;
@@ -24,12 +29,12 @@ module fiber_tb;
     wire    [DATA_WIDTH-1:0]    i_data;
     wire    [DATA_WIDTH-1:0]    o_pe_data_o;
     wire                        o_pe_data_o_valid;
-    wire                        i_pe_data_o_ready;
+    reg                        i_pe_data_o_ready;
     //////////////////// DRAM CROSS BAR ////////////////////
     wire    [ADDR_WIDTH-1:0]    o_dram_addr;
     // inbox requests ports
-    wire    [DATA_WIDTH-1:0]    i_dram_data;
-    wire                        i_dram_data_i_valid;
+    reg    [DATA_WIDTH-1:0]     i_dram_data;
+    reg                         i_dram_data_i_valid;
     wire                        o_dram_data_i_ready;
     // outbox requests ports
     wire    [DATA_WIDTH-1:0]    o_dram_data_o;
@@ -76,6 +81,29 @@ module fiber_tb;
         .i_dram_data_o_ready(i_dram_data_o_ready)
     );
 
+    task fetch_req (input [ADDR_WIDTH-1:0] addr);
+        begin
+            i_type_valid = 1;
+            i_request_type = FETCH_REQ;
+            i_addr = addr;
+            #5
+            i_type_valid = 0;
+        end
+    endtask
+
+    task send_data_from_dram (input ready, output valid, output [DATA_WIDTH-1:0] data);
+        begin
+            if (ready) begin
+                data = 16'b 0000000000000000;
+                valid = 1;
+            end
+            else begin
+                data = 16'b 1111111111111111;
+                valid = 0;
+            end
+        end
+	endtask
+
     // Clock generation
     always #5 i_clk = ~i_clk;
 
@@ -88,8 +116,8 @@ module fiber_tb;
         i_clk = 0;
 
         i_nreset = 1;
-        
-        #4.5
+
+        #2
 
         i_nreset = 0;
         i_type_valid = 0;
@@ -99,9 +127,35 @@ module fiber_tb;
 
         #5
 
-        i_addr = ;
+        // 32: 00000000000000000000000000000000
+        // 32: 11111111111111111111111111111111
         i_type_valid = 1;
+        i_request_type = FETCH_REQ;
+        i_addr = 64'b 0000000000000000000000000000000011111111111111111111111111111111;
 
+        #5
+
+        i_type_valid = 0;
+
+        #15
+
+        send_data_from_dram(o_dram_data_i_ready, i_dram_data_i_valid, i_dram_data);
+
+        #20
+
+        i_type_valid = 1;
+        i_request_type = READ_REQ;
+        i_addr = 64'b 0000000000000000000000000000000011111111111111111111111111111111;
+
+        #25
+        i_type_valid = 0;
+        i_pe_data_o_ready = 1;
+
+        #10
+
+        i_pe_data_o_ready = 0;
+
+        #15
         // End simulation
         $finish;
     end
