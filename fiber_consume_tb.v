@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module fiber_read_tb;
+module fiber_consume_tb;
 
     // Parameters
     localparam DATA_WIDTH=16; // double + 2 * i32
@@ -109,7 +109,7 @@ module fiber_read_tb;
 
     // Testbench logic
     initial begin
-        $dumpfile("dump_read.vcd");
+        $dumpfile("dump_consume.vcd");
         $dumpvars;
 
         // Initialize inputs
@@ -144,7 +144,7 @@ module fiber_read_tb;
         #20
 
         i_type_valid = 1;
-        i_request_type = READ_REQ;
+        i_request_type = CONSUME_REQ;
         i_addr = 64'b 0000000000000000000000000000000011111111111111111111111111111111;
 
         #25

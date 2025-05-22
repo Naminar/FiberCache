@@ -272,7 +272,7 @@ always @(*) begin
 end
 
 always @(posedge i_clk) begin
-    if (state == READ_REQ) begin
+    if (state == READ_REQ | state == CONSUME_REQ) begin
         o_pe_data_o <= pe_data_comb;
     end
 end
@@ -309,11 +309,14 @@ always @(*) begin
     //////////////////// SEL PORTS SIGNING ////////////////////
     for (int i = 0; i < WAYS; i++) begin
         tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
-                                          | is_new_request_read;
+                                          | is_new_request_read
+                                          | is_new_request_consume;
         data_bank_sel[i]                = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[i])
-                                          | is_new_request_read;
-        eviction_meta_info_bank_sel[i]  = is_new_request_fetch | (state == FETCH_REQ)
-                                          | is_new_request_read| (state == READ_REQ);
+                                          | is_new_request_read
+                                          | is_new_request_consume;
+        eviction_meta_info_bank_sel[i]  = is_new_request_fetch      | (state == FETCH_REQ)
+                                          | is_new_request_read     | (state == READ_REQ)
+                                          | is_new_request_consume  | (state == CONSUME_REQ);
         dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i]);
     end
     //////////////////// END SEL PORTS SIGNING ////////////////////
@@ -323,21 +326,22 @@ always @(*) begin
         for (int i = 0; i < WAYS; i++) begin
             valid_bits_read_en[k][i] = 1'b0;
             valid_bits_write_en[k][i] = 1'b0 | ~i_nreset;
-            // valid_bits_write_data[k][i] = 1'b1 & ~(state == CONSUME_REQ & hit_i[i]) & i_nreset;
-            valid_bits_write_data[k][i] = 1'b1 & i_nreset;
+            
+            // CAUTION (maybe need to be changed special for [cur_set][i])
+            valid_bits_write_data[k][i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[i]);
         end
     end
 
     for (int i = 0; i < WAYS; i++) begin
-        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read; // | is_new_request_write  | is_new_request_consume;
-        valid_bits_write_en[cur_set][i] = i_nreset & (miss & state == FETCH_REQ & victim_indicator_i[i]);//(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
+        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read | is_new_request_consume; // | is_new_request_write  | is_new_request_consume;
+        valid_bits_write_en[cur_set][i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[i]) | (state == CONSUME_REQ & hit_i[i]));//(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
     end
     //////////////////// END VALID BITS SIGNING ////////////////////
 
     //////////////////// READ ENABLE SIGNING ////////////////////
-    tag_read_en                 = is_new_request_fetch | is_new_request_read;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    data_read_en                = is_new_request_fetch | is_new_request_read;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read;// | is_new_request_read | is_new_request_write;
+    tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume;// | is_new_request_read | is_new_request_write;
     dirty_bits_read_en          = is_new_request_fetch;// | is_new_request_write;
     //////////////////// END READ ENABLE SIGNING ////////////////////
 

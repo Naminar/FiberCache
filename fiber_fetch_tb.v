@@ -109,7 +109,7 @@ module fiber_fetch_tb;
 
     // Testbench logic
     initial begin
-        $dumpfile("dump.vcd");
+        $dumpfile("dump_fetch.vcd");
         $dumpvars;
 
         // Initialize inputs
