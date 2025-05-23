@@ -72,31 +72,31 @@ reg [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0];
 reg [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0];
 
 
-reg [DATA_WIDTH-1:0] data_write_data;
-reg [WAYS-1:0] data_bank_sel;
-reg data_read_en;
-reg data_write_en;
+wire [DATA_WIDTH-1:0] data_write_data;
+wire [WAYS-1:0] data_bank_sel;
+wire data_read_en;
+wire data_write_en;
 reg [DATA_WIDTH-1:0] data_set [WAYS-1:0];
 
-reg [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
-reg [WAYS-1:0] tag_bank_sel;
-reg tag_read_en;
-reg tag_write_en;
+wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
+wire [WAYS-1:0] tag_bank_sel;
+wire tag_read_en;
+wire tag_write_en;
 
-reg dirty_bits_write_data;
-reg [WAYS-1:0] dirty_bits_bank_sel;
-reg dirty_bits_read_en;
-reg dirty_bits_write_en;
+wire dirty_bits_write_data;
+wire [WAYS-1:0] dirty_bits_bank_sel;
+wire dirty_bits_read_en;
+wire dirty_bits_write_en;
 
-reg [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data [WAYS-1:0];
-reg [WAYS-1:0] eviction_meta_info_bank_sel;
-reg eviction_meta_info_read_en;
-reg eviction_meta_info_write_en;
+wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data [WAYS-1:0];
+wire [WAYS-1:0] eviction_meta_info_bank_sel;
+wire eviction_meta_info_read_en;
+wire eviction_meta_info_write_en;
 
 wire valid_bits_set        [SETS-1:0][WAYS-1:0];
 // reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
-reg  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
-reg  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
+wire  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
+wire  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
 reg  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
@@ -333,89 +333,161 @@ always @(posedge i_clk) begin
             insert_data_handler[i] <= victim_indicator_i[i];
 end
 
+wire [WAYS-1:0] where_to_write_while_write_stage;
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++)
+        assign where_to_write_while_write_stage[gen_i] = (hit)? hit_i[gen_i]: victim_indicator_i[gen_i];
+endgenerate
 
-reg [WAYS-1:0] where_to_write_while_write_stage;
-always @(*) begin
-    for (int i = 0; i < WAYS; i++)
-        if (hit)
-            where_to_write_while_write_stage[i] = hit_i[i];
-        else
-            where_to_write_while_write_stage[i] = victim_indicator_i[i];
-end
+// reg [WAYS-1:0] where_to_write_while_write_stage;
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++)
+//         if (hit)
+//             where_to_write_while_write_stage[i] = hit_i[i];
+//         else
+//             where_to_write_while_write_stage[i] = victim_indicator_i[i];
+// end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
 wire is_new_request_read = new_request == READ_REQ;
 wire is_new_request_write = new_request == WRITE_REQ;
 wire is_new_request_consume = new_request == CONSUME_REQ;
 
-always @(*) begin
+
+generate
     //////////////////// SEL PORTS SIGNING ////////////////////
-    for (int i = 0; i < WAYS; i++) begin
-        tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign tag_bank_sel[gen_i]      = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[gen_i])
                                           | is_new_request_read
                                           | is_new_request_consume
-                                          | is_new_request_write | (miss & state == WRITE_REQ & victim_indicator_i[i]);
-        data_bank_sel[i]                = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[i])
+                                          | is_new_request_write | (miss & state == WRITE_REQ & victim_indicator_i[gen_i]);
+        assign data_bank_sel[gen_i]         = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[gen_i])
                                           | is_new_request_read
                                           | is_new_request_consume
-                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
-        eviction_meta_info_bank_sel[i]  = is_new_request_fetch      | (state == FETCH_REQ)
+                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]);
+        assign eviction_meta_info_bank_sel[gen_i]  = is_new_request_fetch      | (state == FETCH_REQ)
                                           | is_new_request_read     | (state == READ_REQ)
                                           | is_new_request_consume  | (state == CONSUME_REQ)
                                           | is_new_request_write    | (state == WRITE_REQ);
-        dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
-                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
+        assign dirty_bits_bank_sel[gen_i]   = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[gen_i])
+                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]);
     end
     //////////////////// END SEL PORTS SIGNING ////////////////////
 
     //////////////////// VALID BITS SIGNING ////////////////////
-    for (int k = 0; k < SETS; k++) begin
-        for (int i = 0; i < WAYS; i++) begin
-            valid_bits_read_en[k][i] = 1'b0;
-            valid_bits_write_en[k][i] = 1'b0 | ~i_nreset;
+    for (gen_k = 0; gen_k < SETS; gen_k++) begin
+        for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+            assign valid_bits_read_en[gen_k][gen_i] = 1'b0;
+            assign valid_bits_write_en[gen_k][gen_i] = 1'b0 | ~i_nreset;
 
-            valid_bits_write_data[k][i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[i]);
+            assign valid_bits_write_data[gen_k][gen_i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[gen_i]);
         end
     end
 
-    for (int i = 0; i < WAYS; i++) begin
-        valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write; // | is_new_request_write  | is_new_request_consume;
-        valid_bits_write_en[cur_set][i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[i]) | (state == CONSUME_REQ & hit_i[i]) | (state == WRITE_REQ & where_to_write_while_write_stage[i])); //(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign valid_bits_read_en[cur_set][gen_i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write; // | is_new_request_write  | is_new_request_consume;
+        assign valid_bits_write_en[cur_set][gen_i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[gen_i]) | (state == CONSUME_REQ & hit_i[gen_i]) | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i])); //(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
     end
     //////////////////// END VALID BITS SIGNING ////////////////////
 
     //////////////////// READ ENABLE SIGNING ////////////////////
-    tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
-    dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
+    assign tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    assign data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    assign eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
+    assign dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
     //////////////////// END READ ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE ENABLE SIGNING ////////////////////
-    tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ);
+    assign tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ);
     // CAUTION (for fetch stage is done)
-    data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
+    assign data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
     // CAUTION
-    eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ) | (state == WRITE_REQ);
-    dirty_bits_write_en = (miss & state == FETCH_REQ) | (state == WRITE_REQ);
+    assign  eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ) | (state == WRITE_REQ);
+    assign  dirty_bits_write_en = (miss & state == FETCH_REQ) | (state == WRITE_REQ);
     //////////////////// END WRITE ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE DATA SIGNING ////////////////////
-    for (int i = 0; i < WAYS; i++) begin
-        eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign eviction_meta_info_write_data[gen_i] = {new_priority_set[gen_i], new_srrip_set[gen_i]};
     end
     // CAUTION
-    tag_write_data = cur_tag;
+    assign tag_write_data = cur_tag;
     // CAUTION
-    dirty_bits_write_data = state == WRITE_REQ;
+    assign dirty_bits_write_data = state == WRITE_REQ;
 
     // CAUTION
-    if (internal_state == RECEIVE_DATA)
-        data_write_data = i_dram_data;
-    else
-        data_write_data = internal_data;
+    assign data_write_data = (internal_state == RECEIVE_DATA)? i_dram_data: internal_data;
     //////////////////// END WRITE DATA SIGNING ////////////////////
-end
+endgenerate
+
+// always @(*) begin
+    // //////////////////// SEL PORTS SIGNING ////////////////////
+    // for (int i = 0; i < WAYS; i++) begin
+    //     tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
+    //                                       | is_new_request_read
+    //                                       | is_new_request_consume
+    //                                       | is_new_request_write | (miss & state == WRITE_REQ & victim_indicator_i[i]);
+    //     data_bank_sel[i]                = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[i])
+    //                                       | is_new_request_read
+    //                                       | is_new_request_consume
+    //                                       | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
+    //     eviction_meta_info_bank_sel[i]  = is_new_request_fetch      | (state == FETCH_REQ)
+    //                                       | is_new_request_read     | (state == READ_REQ)
+    //                                       | is_new_request_consume  | (state == CONSUME_REQ)
+    //                                       | is_new_request_write    | (state == WRITE_REQ);
+    //     dirty_bits_bank_sel[i]          = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
+    //                                       | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[i]);
+    // end
+    // //////////////////// END SEL PORTS SIGNING ////////////////////
+
+    //////////////////// VALID BITS SIGNING ////////////////////
+    // for (int k = 0; k < SETS; k++) begin
+    //     for (int i = 0; i < WAYS; i++) begin
+    //         valid_bits_read_en[k][i] = 1'b0;
+    //         valid_bits_write_en[k][i] = 1'b0 | ~i_nreset;
+
+    //         valid_bits_write_data[k][i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[i]);
+    //     end
+    // end
+
+    // for (int i = 0; i < WAYS; i++) begin
+    //     valid_bits_read_en[cur_set][i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write; // | is_new_request_write  | is_new_request_consume;
+    //     valid_bits_write_en[cur_set][i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[i]) | (state == CONSUME_REQ & hit_i[i]) | (state == WRITE_REQ & where_to_write_while_write_stage[i])); //(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
+    // end
+    //////////////////// END VALID BITS SIGNING ////////////////////
+
+    // //////////////////// READ ENABLE SIGNING ////////////////////
+    // tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    // data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
+    // eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
+    // dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
+    // //////////////////// END READ ENABLE SIGNING ////////////////////
+
+    // //////////////////// WRITE ENABLE SIGNING ////////////////////
+    // tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ);
+    // // CAUTION (for fetch stage is done)
+    // data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
+    // // CAUTION
+    // eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ) | (state == WRITE_REQ);
+    // dirty_bits_write_en = (miss & state == FETCH_REQ) | (state == WRITE_REQ);
+    // //////////////////// END WRITE ENABLE SIGNING ////////////////////
+
+    // //////////////////// WRITE DATA SIGNING ////////////////////
+    // for (int i = 0; i < WAYS; i++) begin
+    //     eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
+    // end
+    // // CAUTION
+    // tag_write_data = cur_tag;
+    // // CAUTION
+    // dirty_bits_write_data = state == WRITE_REQ;
+
+    // // CAUTION
+    // if (internal_state == RECEIVE_DATA)
+    //     data_write_data = i_dram_data;
+    // else
+    //     data_write_data = internal_data;
+    // //////////////////// END WRITE DATA SIGNING ////////////////////
+// end
 
 reg [WAYS-1:0] hit_i;
 reg hit;
