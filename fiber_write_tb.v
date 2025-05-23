@@ -159,15 +159,12 @@ module fiber_write_tb;
         i_addr = 64'b 0000000000000000000000000000000011111111111111111111111111111111;
         i_data = 16'b 1111111111111111;
 
+        #10
+        i_type_valid = 0;
+
         #25
         i_type_valid = 0;
-        i_pe_data_o_ready = 1;
 
-        #10
-
-        i_pe_data_o_ready = 0;
-
-        #15
         // End simulation
         $finish;
     end

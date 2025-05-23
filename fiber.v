@@ -59,7 +59,7 @@ localparam NONE                     = 4'b0000;
 //|      [63:12]    |      [11:4]       |        [3:0]      |
 //-----------------------------------------------------------
 //=============================================================================
-// wire [$clog2(SETS)-1:0] cur_set = i_addr_d[$clog2(DATA_WIDTH) +: $clog2(SETS)];
+
 wire [$clog2(SETS)-1:0] cur_set = (|{state,internal_state})? internal_set: incoming_set;
 wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = internal_addr[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
 wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0];
@@ -207,8 +207,6 @@ generate
 endgenerate
 // END DEBUG GENERATE
 
-// reg [3:0] i_request_type_d;
-// reg i_type_valid_d;
 reg [ADDR_WIDTH-1:0]    internal_addr;
 
 reg [3:0] state;
@@ -240,25 +238,75 @@ end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
 
+// always @(posedge i_clk) begin
+    // if (~i_nreset)
+    //     internal_state <= NONE;
+    // else if (miss & is_victim_dirty & state == FETCH_REQ)
+    //     internal_state <= SEND_DIRTY_VICTIM;
+    // else if (miss & is_victim_dirty & state == WRITE_REQ)
+    //     internal_state <= ONLY_SEND_DIRTY_VICTIM;
+    // else if (miss & state == FETCH_REQ)
+    //     internal_state <= RECEIVE_DATA;
+    // else if (i_pe_data_o_ready & o_pe_data_o_valid)
+    //     internal_state <= NONE;
+    // else if (state == READ_REQ | state == CONSUME_REQ)
+    //     internal_state <= SEND_TO_PE;
+    // else if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready)
+    //     internal_state <= RECEIVE_DATA;
+    // else if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready)
+    //     internal_state <= NONE;
+    // else if (internal_state == RECEIVE_DATA & i_dram_data_i_valid)
+    //     internal_state <= NONE;
+// end
+
 always @(posedge i_clk) begin
     if (~i_nreset)
         internal_state <= NONE;
-    else if (miss & is_victim_dirty & state == FETCH_REQ)
-        internal_state <= SEND_DIRTY_VICTIM;
-    else if (miss & is_victim_dirty & state == WRITE_REQ)
-        internal_state <= ONLY_SEND_DIRTY_VICTIM;
-    else if (miss & state == FETCH_REQ)
-        internal_state <= RECEIVE_DATA;
-    else if (i_pe_data_o_ready & o_pe_data_o_valid)
-        internal_state <= NONE;
-    else if (state == READ_REQ | state == CONSUME_REQ)
-        internal_state <= SEND_TO_PE;
-    else if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready)
-        internal_state <= RECEIVE_DATA;
-    else if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready)
-        internal_state <= NONE;
-    else if (internal_state == RECEIVE_DATA & i_dram_data_i_valid)
-        internal_state <= NONE;
+    else case (state)
+        FETCH_REQ: begin
+            if (miss)
+                if (is_victim_dirty)
+                    internal_state <= SEND_DIRTY_VICTIM;
+                else
+                    internal_state <= RECEIVE_DATA;
+
+            // if (miss & is_victim_dirty)
+            //     internal_state <= SEND_DIRTY_VICTIM
+            // else if (miss)
+            //     internal_state <= RECEIVE_DATA;
+        end
+
+        READ_REQ, CONSUME_REQ: begin
+            internal_state <= SEND_TO_PE;
+        end
+
+        WRITE_REQ: begin
+            if (miss & is_victim_dirty)
+                internal_state <= ONLY_SEND_DIRTY_VICTIM;
+        end
+
+        default: case (internal_state)
+            SEND_TO_PE: begin
+                if (i_pe_data_o_ready)
+                    internal_state <= NONE;
+            end
+            SEND_DIRTY_VICTIM: begin
+                if (i_dram_data_o_ready)
+                    internal_state <= RECEIVE_DATA;
+            end
+            ONLY_SEND_DIRTY_VICTIM: begin
+                if (i_dram_data_o_ready)
+                    internal_state <= NONE;
+            end
+            RECEIVE_DATA: begin
+                if (i_dram_data_i_valid)
+                    internal_state <= NONE;
+            end
+
+            default:
+                internal_state <= internal_state;
+        endcase
+    endcase
 end
 
 reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
@@ -282,16 +330,9 @@ assign o_dram_data_o_valid = (internal_state == SEND_DIRTY_VICTIM) | (internal_s
 assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
 
 always @(posedge i_clk) begin
-    // if (miss & (state == FETCH_REQ | state == WRITE_REQ))
-    
     for (int i = 0; i < WAYS; i++)
         if (miss & state == FETCH_REQ)
             insert_data_handler[i] = victim_indicator_i[i];
-        // else if (state == WRITE_REQ)
-        //     if (miss)
-        //         insert_data_handler[i] = victim_indicator_i[i];
-        //     else if (hit)
-        //         insert_data_handler[i] = hit_i[i];
 end
 
 
@@ -310,18 +351,6 @@ wire is_new_request_write = new_request == WRITE_REQ;
 wire is_new_request_consume = new_request == CONSUME_REQ;
 
 always @(*) begin
-    // for (int i = 0; i < WAYS; i++) begin
-    //     tag_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
-    //     // anyway update even if there's no dirty victim
-    //     eviction_meta_info_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | (state == WRITE_REQ & victim_indicator_i[i]) |(state == FETCH_REQ);
-    //     // TODO: modify special for
-    //     dirty_bits_bank_sel[i] = is_new_request_fetch | is_new_request_write | (state == WRITE_REQ & hit_i[i]) | (state == WRITE_REQ & victim_indicator_i[i]) | (state == FETCH_REQ & victim_indicator_i[i]);
-    //     // It's updated after data would be received
-    //     data_bank_sel[i] = is_new_request_fetch | is_new_request_read | is_new_request_write | is_new_request_consume | (state == WRITE_REQ & (hit_i[i] | victim_indicator_i[i])) | (internal_state == RECEIVE_DATA & victim_indicator_i[i]);
-
-    //     eviction_meta_info_write_data[i] = {new_priority_set[i], new_srrip_set[i]};
-    // end
-
     //////////////////// SEL PORTS SIGNING ////////////////////
     for (int i = 0; i < WAYS; i++) begin
         tag_bank_sel[i]                 = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[i])
@@ -346,8 +375,7 @@ always @(*) begin
         for (int i = 0; i < WAYS; i++) begin
             valid_bits_read_en[k][i] = 1'b0;
             valid_bits_write_en[k][i] = 1'b0 | ~i_nreset;
-            
-            // CAUTION (maybe need to be changed special for [cur_set][i])
+
             valid_bits_write_data[k][i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[i]);
         end
     end
@@ -362,11 +390,11 @@ always @(*) begin
     tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
     data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
     eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
-    dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;// | is_new_request_write;
+    dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
     //////////////////// END READ ENABLE SIGNING ////////////////////
 
     //////////////////// WRITE ENABLE SIGNING ////////////////////
-    tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ); // | state == WRITE_REQ);
+    tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ);
     // CAUTION (for fetch stage is done)
     data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
     // CAUTION
@@ -393,10 +421,7 @@ end
 
 reg [WAYS-1:0] hit_i;
 reg hit;
-/* verilator lint_off UNOPTFLAT */
 reg miss;
-/* verilator lint_on UNOPTFLAT */
-
 
 reg [PRIORITY_BITS-1:0] new_priority_set    [WAYS-1:0];
 reg [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
@@ -507,8 +532,6 @@ always @(*) begin
             victim_indicator_i[i] = (i == (first_invalid-1));
         else
             victim_indicator_i[i] = (max_srrip_indicator[i]);
-            // CAUTION
-            //?? victim_indicator_i[i] = (miss & max_srrip_indicator[i]);
 
     for (int i = 0; i < WAYS; i++)
         is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i] & valid_bits_set[cur_set][i];
@@ -549,13 +572,12 @@ always @(*) begin
 end
 
 always @(posedge i_clk) begin
-    if (miss & is_victim_dirty & (state == FETCH_REQ | state == WRITE_REQ)) begin // | miss
+    if (miss & is_victim_dirty & (state == FETCH_REQ | state == WRITE_REQ)) begin
         dirty_data <= dirty_data_comb;
         dirty_addr <= dirty_addr_comb;
     end
 end
 
-// CAUTION
 always @(*) begin
     o_dram_data_o = dirty_data;
     o_dram_addr = dirty_addr;
@@ -563,20 +585,5 @@ always @(*) begin
     if (internal_state == RECEIVE_DATA)
         o_dram_addr = internal_addr;
 end
-
-// always @(*) begin
-//     for (int i = 0; i < WAYS; i++)
-//         if (state == WRITE_REQ) begin
-//             if (hit)
-//                 new_srrip_set[i] = srrip_set[i];
-//             else
-//                 new_srrip_set[i] = srrip_set[i] & {SRRIP_BITS{~victim_indicator_i[i]}};
-//         end else begin
-//             if (hit)
-//                 new_srrip_set[i] = new_srrip_set_hit[i];
-//             else
-//                 new_srrip_set[i] = new_srrip_set_miss[i];
-//         end
-// end
 
 endmodule
