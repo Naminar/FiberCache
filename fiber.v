@@ -1,4 +1,4 @@
-module fiberBank #(
+module fiber #(
     DATA_WIDTH=16, // double + 2 * i32
     SETS=256,
     WAYS=16,
@@ -65,8 +65,8 @@ wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = internal_addr[AD
 wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0];
 
 
-reg [$clog2(SETS)-1:0] set_to_write;
-wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_set      [WAYS-1:0];
+// reg [$clog2(SETS)-1:0] set_to_write;
+// wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_set      [WAYS-1:0];
 wire                                dirty_bits_set              [WAYS-1:0];
 reg [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0];
 reg [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0];
@@ -94,15 +94,15 @@ reg eviction_meta_info_read_en;
 reg eviction_meta_info_write_en;
 
 wire valid_bits_set        [SETS-1:0][WAYS-1:0];
-reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
+// reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
 reg  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
 reg  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
 reg  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
-genvar i, k;
+genvar gen_i, gen_k;
 generate
-    for (i = 0; i < WAYS; i++) begin:sets_blk
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin:sets_blk
         srambank
                 #(
                     .ADDRESS($clog2(SETS)),
@@ -112,10 +112,10 @@ generate
                     .i_clk(i_clk),
                     .i_address(cur_set),
                     .i_write_data(data_write_data),
-                    .i_bank_sel(data_bank_sel[i]),
+                    .i_bank_sel(data_bank_sel[gen_i]),
                     .i_read_en(data_read_en),
                     .i_write_en(data_write_en),
-                    .o_data_out(data_set[i])
+                    .o_data_out(data_set[gen_i])
                 );
 
         srambank
@@ -127,10 +127,10 @@ generate
                     .i_clk(i_clk),
                     .i_address(cur_set),
                     .i_write_data(tag_write_data),
-                    .i_bank_sel(tag_bank_sel[i]),
+                    .i_bank_sel(tag_bank_sel[gen_i]),
                     .i_read_en(tag_read_en),
                     .i_write_en(tag_write_en),
-                    .o_data_out(tag_set[i])
+                    .o_data_out(tag_set[gen_i])
                 );
 
         srambank
@@ -142,10 +142,10 @@ generate
                     .i_clk(i_clk),
                     .i_address(cur_set),
                     .i_write_data(dirty_bits_write_data),
-                    .i_bank_sel(dirty_bits_bank_sel[i]),
+                    .i_bank_sel(dirty_bits_bank_sel[gen_i]),
                     .i_read_en(dirty_bits_read_en),
                     .i_write_en(dirty_bits_write_en),
-                    .o_data_out(dirty_bits_set[i])
+                    .o_data_out(dirty_bits_set[gen_i])
                 );
 
 
@@ -157,16 +157,16 @@ generate
                 (
                     .i_clk(i_clk),
                     .i_address(cur_set),
-                    .i_write_data(eviction_meta_info_write_data[i]),
-                    .i_bank_sel(eviction_meta_info_bank_sel[i]),
+                    .i_write_data(eviction_meta_info_write_data[gen_i]),
+                    .i_bank_sel(eviction_meta_info_bank_sel[gen_i]),
                     .i_read_en(eviction_meta_info_read_en),
                     .i_write_en(eviction_meta_info_write_en),
-                    .o_data_out({priority_set[i], srrip_set[i]})
+                    .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
                 );
     end
 
-    for (i = 0; i < WAYS; i++) begin:valid_ways_blk
-        for (k = 0; k < SETS; k++) begin:valid_sets_blk
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin:valid_ways_blk
+        for (gen_k = 0; gen_k < SETS; gen_k++) begin:valid_sets_blk
             single_srambank
                 #(
                     .DATA(1)
@@ -174,37 +174,37 @@ generate
                 valid_bits_array
                 (
                     .i_clk(i_clk),
-                    .i_write_data(valid_bits_write_data[k][i]),
+                    .i_write_data(valid_bits_write_data[gen_k][gen_i]),
                     .i_bank_sel(1'b1),
-                    .i_read_en(valid_bits_read_en[k][i]),
-                    .i_write_en(valid_bits_write_en[k][i]),
-                    .o_data_out(valid_bits_set[k][i])
+                    .i_read_en(valid_bits_read_en[gen_k][gen_i]),
+                    .i_write_en(valid_bits_write_en[gen_k][gen_i]),
+                    .o_data_out(valid_bits_set[gen_k][gen_i])
                 );
         end
     end
 endgenerate
 
-wire [SETS-1:0][WAYS-1:0] dump_valid_bits_write_en;
-wire [SETS-1:0][WAYS-1:0] dump_valid_bits_write_data;
-wire [WAYS-1:0] dump_valid_bits_set;
-wire [WAYS-1:0][SRRIP_BITS+PRIORITY_BITS-1:0] dump_eviction_meta_info_write_data;
-wire [WAYS-1:0][SRRIP_BITS+PRIORITY_BITS-1:0] dump_old_eviction_meta_info;
+// wire [SETS-1:0][WAYS-1:0] dump_valid_bits_write_en;
+// wire [SETS-1:0][WAYS-1:0] dump_valid_bits_write_data;
+// wire [WAYS-1:0] dump_valid_bits_set;
+// wire [WAYS-1:0][SRRIP_BITS+PRIORITY_BITS-1:0] dump_eviction_meta_info_write_data;
+// wire [WAYS-1:0][SRRIP_BITS+PRIORITY_BITS-1:0] dump_old_eviction_meta_info;
 
 // DEBUG GENERATE
-generate
-    for (genvar i = 0; i < SETS; i++) begin
-        for (genvar j = 0; j < WAYS; j++) begin
-            assign dump_valid_bits_write_en[i][j] = valid_bits_write_en[i][j];
-            assign dump_valid_bits_write_data[i][j] = valid_bits_write_data[i][j];
-        end
-    end
+// generate
+//     for (genvar i = 0; i < SETS; i++) begin
+//         for (genvar j = 0; j < WAYS; j++) begin
+//             assign dump_valid_bits_write_en[i][j] = valid_bits_write_en[i][j];
+//             assign dump_valid_bits_write_data[i][j] = valid_bits_write_data[i][j];
+//         end
+//     end
 
-    for (genvar i = 0; i < WAYS; i++) begin
-        assign dump_valid_bits_set[i] = valid_bits_set[cur_set][i];
-        assign dump_eviction_meta_info_write_data[i] = eviction_meta_info_write_data[i];
-        assign dump_old_eviction_meta_info[i] = {priority_set[i], srrip_set[i]};
-    end
-endgenerate
+//     for (genvar i = 0; i < WAYS; i++) begin
+//         assign dump_valid_bits_set[i] = valid_bits_set[cur_set][i];
+//         assign dump_eviction_meta_info_write_data[i] = eviction_meta_info_write_data[i];
+//         assign dump_old_eviction_meta_info[i] = {priority_set[i], srrip_set[i]};
+//     end
+// endgenerate
 // END DEBUG GENERATE
 
 reg [ADDR_WIDTH-1:0]    internal_addr;
@@ -309,8 +309,6 @@ always @(posedge i_clk) begin
     endcase
 end
 
-reg [DATA_WIDTH-1:0] victim_data_i [WAYS-1:0];
-
 reg [DATA_WIDTH-1:0] pe_data_comb;
 
 always @(*) begin
@@ -332,7 +330,7 @@ assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
 always @(posedge i_clk) begin
     for (int i = 0; i < WAYS; i++)
         if (miss & state == FETCH_REQ)
-            insert_data_handler[i] = victim_indicator_i[i];
+            insert_data_handler[i] <= victim_indicator_i[i];
 end
 
 
