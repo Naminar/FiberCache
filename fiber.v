@@ -34,7 +34,7 @@ module fiber #(
     output  wire                        o_dram_data_i_ready,
 
     // outbox requests ports
-    output  reg    [DATA_WIDTH-1:0]     o_dram_data_o,
+    output  wire    [DATA_WIDTH-1:0]     o_dram_data_o,
     output  wire                        o_dram_data_o_valid,
     input   wire                        i_dram_data_o_ready
 );
@@ -65,8 +65,6 @@ wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = internal_addr[AD
 wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0];
 
 
-// reg [$clog2(SETS)-1:0] set_to_write;
-// wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_set      [WAYS-1:0];
 wire                                dirty_bits_set              [WAYS-1:0];
 reg [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0];
 reg [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0];
@@ -94,7 +92,6 @@ wire eviction_meta_info_read_en;
 wire eviction_meta_info_write_en;
 
 wire valid_bits_set        [SETS-1:0][WAYS-1:0];
-// reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
 wire  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
 wire  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
 wire  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
@@ -238,27 +235,6 @@ end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
 
-// always @(posedge i_clk) begin
-    // if (~i_nreset)
-    //     internal_state <= NONE;
-    // else if (miss & is_victim_dirty & state == FETCH_REQ)
-    //     internal_state <= SEND_DIRTY_VICTIM;
-    // else if (miss & is_victim_dirty & state == WRITE_REQ)
-    //     internal_state <= ONLY_SEND_DIRTY_VICTIM;
-    // else if (miss & state == FETCH_REQ)
-    //     internal_state <= RECEIVE_DATA;
-    // else if (i_pe_data_o_ready & o_pe_data_o_valid)
-    //     internal_state <= NONE;
-    // else if (state == READ_REQ | state == CONSUME_REQ)
-    //     internal_state <= SEND_TO_PE;
-    // else if (internal_state == SEND_DIRTY_VICTIM & i_dram_data_o_ready)
-    //     internal_state <= RECEIVE_DATA;
-    // else if (internal_state == ONLY_SEND_DIRTY_VICTIM & i_dram_data_o_ready)
-    //     internal_state <= NONE;
-    // else if (internal_state == RECEIVE_DATA & i_dram_data_i_valid)
-    //     internal_state <= NONE;
-// end
-
 always @(posedge i_clk) begin
     if (~i_nreset)
         internal_state <= NONE;
@@ -339,15 +315,6 @@ generate
         assign where_to_write_while_write_stage[gen_i] = (hit)? hit_i[gen_i]: victim_indicator_i[gen_i];
 endgenerate
 
-// reg [WAYS-1:0] where_to_write_while_write_stage;
-// always @(*) begin
-//     for (int i = 0; i < WAYS; i++)
-//         if (hit)
-//             where_to_write_while_write_stage[i] = hit_i[i];
-//         else
-//             where_to_write_while_write_stage[i] = victim_indicator_i[i];
-// end
-
 wire is_new_request_fetch = new_request == FETCH_REQ;
 wire is_new_request_read = new_request == READ_REQ;
 wire is_new_request_write = new_request == WRITE_REQ;
@@ -377,23 +344,23 @@ generate
     //////////////////// VALID BITS SIGNING ////////////////////
     for (gen_k = 0; gen_k < SETS; gen_k++) begin
         for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-            assign valid_bits_read_en[gen_k][gen_i] = 1'b0;
-            assign valid_bits_write_en[gen_k][gen_i] = 1'b0 | ~i_nreset;
+            assign valid_bits_read_en[gen_k][gen_i] = (cur_set == gen_k) & (is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write); //1'b0;
+            assign valid_bits_write_en[gen_k][gen_i] = ~i_nreset | ((cur_set == gen_k) & ((miss & state == FETCH_REQ & victim_indicator_i[gen_i]) | (state == CONSUME_REQ & hit_i[gen_i]) | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]))); //1'b0 | ~i_nreset;
 
             assign valid_bits_write_data[gen_k][gen_i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[gen_i]);
         end
     end
 
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign valid_bits_read_en[cur_set][gen_i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write; // | is_new_request_write  | is_new_request_consume;
-        assign valid_bits_write_en[cur_set][gen_i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[gen_i]) | (state == CONSUME_REQ & hit_i[gen_i]) | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i])); //(victim_indicator_i[i] | (state == CONSUME_REQ & hit_i[i])) & i_nreset;
-    end
+    // for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+    //     assign valid_bits_read_en[cur_set][gen_i] = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
+    //     assign valid_bits_write_en[cur_set][gen_i] = i_nreset & ((miss & state == FETCH_REQ & victim_indicator_i[gen_i]) | (state == CONSUME_REQ & hit_i[gen_i]) | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]));
+    // end
     //////////////////// END VALID BITS SIGNING ////////////////////
 
     //////////////////// READ ENABLE SIGNING ////////////////////
-    assign tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    assign data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write | is_new_request_consume;
-    assign eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;// | is_new_request_read | is_new_request_write;
+    assign tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
+    assign data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
+    assign eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
     assign dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
     //////////////////// END READ ENABLE SIGNING ////////////////////
 
@@ -419,6 +386,11 @@ generate
     assign data_write_data = (internal_state == RECEIVE_DATA)? i_dram_data: internal_data;
     //////////////////// END WRITE DATA SIGNING ////////////////////
 endgenerate
+
+// generate
+//     for (gen_i = 0; gen_i < WAYS; gen_i++)
+//         hit_i[gen_i] = (cur_tag == tag_set[gen_i]) & valid_bits_set[cur_set][gen_i];
+// endgenerate
 
 // always @(*) begin
     // //////////////////// SEL PORTS SIGNING ////////////////////
@@ -489,26 +461,33 @@ endgenerate
     // //////////////////// END WRITE DATA SIGNING ////////////////////
 // end
 
-reg [WAYS-1:0] hit_i;
-reg hit;
-reg miss;
+wire [WAYS-1:0] hit_i;
+// wire hit;
+// wire miss;
 
 reg [PRIORITY_BITS-1:0] new_priority_set    [WAYS-1:0];
-reg [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
-reg [SRRIP_BITS-1:0]    new_srrip_set_hit   [WAYS-1:0];
-reg [SRRIP_BITS-1:0]    new_srrip_set_miss  [WAYS-1:0];
-reg [SRRIP_BITS-1:0]    new_srrip_set       [WAYS-1:0];
+wire [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
+wire [SRRIP_BITS-1:0]    new_srrip_set_hit   [WAYS-1:0];
+wire [SRRIP_BITS-1:0]    new_srrip_set_miss  [WAYS-1:0];
+wire [SRRIP_BITS-1:0]    new_srrip_set       [WAYS-1:0];
 
 wire [$clog2(SETS)-1:0] incoming_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 wire [$clog2(SETS)-1:0] internal_set = internal_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 
-always @(*) begin
-    for (int i = 0; i < WAYS; i++) begin
-        hit_i[i] = (cur_tag == tag_set[i]) & valid_bits_set[cur_set][i];
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++) begin
+//         hit_i[i] = (cur_tag == tag_set[i]) & valid_bits_set[cur_set][i];
+//     end
+// end
+
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign hit_i[gen_i] = (cur_tag == tag_set[gen_i]) & valid_bits_set[cur_set][gen_i];
     end
-    hit = |hit_i;
-    miss = ~hit;
-end
+endgenerate
+
+wire hit = |hit_i;
+wire miss = ~hit;
 
 always @(*) begin
     for (int i = 0; i < WAYS; i++)
@@ -535,20 +514,27 @@ always @(*) begin
             new_priority_set[i] = priority_set[i];
 end
 
-always @(*) begin
-    for (int i = 0; i < WAYS; i++) begin
-        if (srrip_set[i] == {SRRIP_BITS{1'b1}})
-            new_srrip_set_inc[i] = srrip_set[i];
-        else
-            new_srrip_set_inc[i] = srrip_set[i] + 1;
-        new_srrip_set_hit[i] = new_srrip_set_inc[i] & {SRRIP_BITS{~hit_i[i]}};
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++) begin
+//         if (srrip_set[i] == {SRRIP_BITS{1'b1}})
+//             new_srrip_set_inc[i] = srrip_set[i];
+//         else
+//             new_srrip_set_inc[i] = srrip_set[i] + 1;
+//         new_srrip_set_hit[i] = new_srrip_set_inc[i] & {SRRIP_BITS{~hit_i[i]}};
+//     end
+// end
+
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign new_srrip_set_inc[gen_i] = (srrip_set[gen_i] == {SRRIP_BITS{1'b1}})? srrip_set[gen_i]: srrip_set[gen_i] + 1;
+        assign new_srrip_set_hit[gen_i] = new_srrip_set_inc[gen_i] & {SRRIP_BITS{~hit_i[gen_i]}};
     end
-end
+endgenerate
 
 reg [PRIORITY_BITS-1:0] min_priority;
-reg [WAYS-1:0]          min_indicator;
+wire [WAYS-1:0]          min_indicator;
 reg [SRRIP_BITS-1:0]    max_srrip;
-reg [WAYS-1:0]          max_srrip_indicator;
+wire [WAYS-1:0]          max_srrip_indicator;
 
 always @(*) begin
     min_priority = {PRIORITY_BITS{1'b1}};
@@ -557,13 +543,13 @@ always @(*) begin
             min_priority = priority_set[i];
     end
 
-    for (int i = 0; i < WAYS; i++) begin
-        // without if ?
-        if (priority_set[i] == min_priority)
-            min_indicator[i] = 1'b1;
-        else
-            min_indicator[i] = 1'b0;
-    end
+    // for (int i = 0; i < WAYS; i++) begin
+    //     // without if ?
+    //     if (priority_set[i] == min_priority)
+    //         min_indicator[i] = 1'b1;
+    //     else
+    //         min_indicator[i] = 1'b0;
+    // end
 
     max_srrip = {SRRIP_BITS{1'b0}};
     for (int i = 0; i < WAYS; i++) begin
@@ -571,13 +557,20 @@ always @(*) begin
             max_srrip = srrip_set[i];
     end
 
-    for (int i = 0; i < WAYS; i++) begin
-        if ((srrip_set[i] == max_srrip) & min_indicator[i] == 1'b1)
-            max_srrip_indicator[i] = 1'b1;
-        else
-            max_srrip_indicator[i] = 1'b0;
-    end
+    // for (int i = 0; i < WAYS; i++) begin
+    //     if ((srrip_set[i] == max_srrip) & min_indicator[i] == 1'b1)
+    //         max_srrip_indicator[i] = 1'b1;
+    //     else
+    //         max_srrip_indicator[i] = 1'b0;
+    // end
 end
+
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign max_srrip_indicator[gen_i] = ((srrip_set[gen_i] == max_srrip) & min_indicator[gen_i] == 1'b1);
+        assign min_indicator[gen_i] = (priority_set[gen_i] == min_priority);
+    end
+endgenerate
 
 reg [WAYS-1:0] invalid_bits_line;
 wire is_smth_invalid = |invalid_bits_line;
@@ -593,37 +586,51 @@ always @(*) begin
     end
 end
 
-reg is_victim_dirty;
-reg [WAYS-1:0] is_victim_dirty_i;
-reg [WAYS-1:0] victim_indicator_i;
-always @(*) begin
-    for (int i = 0; i < WAYS; i++)
-        if (is_smth_invalid)
-            victim_indicator_i[i] = (i == (first_invalid-1));
-        else
-            victim_indicator_i[i] = (max_srrip_indicator[i]);
+wire [WAYS-1:0] is_victim_dirty_i;
+wire [WAYS-1:0] victim_indicator_i;
+wire is_victim_dirty = |is_victim_dirty_i;
 
-    for (int i = 0; i < WAYS; i++)
-        is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i] & valid_bits_set[cur_set][i];
-    is_victim_dirty = |is_victim_dirty_i;
-end
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++)
+//         if (is_smth_invalid)
+//             victim_indicator_i[i] = (i == (first_invalid-1));
+//         else
+//             victim_indicator_i[i] = (max_srrip_indicator[i]);
 
-always @(*) begin
-    for (int i = 0; i < WAYS; i++) begin
-        if (victim_indicator_i[i])
-            new_srrip_set_miss[i] = {{SRRIP_BITS-1{1'b1}}, 1'b0};
-        else
-            new_srrip_set_miss[i] = new_srrip_set_inc[i];
+//     for (int i = 0; i < WAYS; i++)
+//         is_victim_dirty_i[i] = victim_indicator_i[i] & dirty_bits_set[i] & valid_bits_set[cur_set][i];
+// end
+
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign victim_indicator_i[gen_i] = (is_smth_invalid)? (gen_i == (first_invalid-1)): (max_srrip_indicator[gen_i]);
+        assign is_victim_dirty_i[gen_i] = victim_indicator_i[gen_i] & dirty_bits_set[gen_i] & valid_bits_set[cur_set][gen_i];
     end
-end
+endgenerate
 
-always @(*) begin
-    for (int i = 0; i < WAYS; i++)
-        if (hit)
-            new_srrip_set[i] = new_srrip_set_hit[i];
-        else
-            new_srrip_set[i] = new_srrip_set_miss[i];
-end
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++) begin
+//         if (victim_indicator_i[i])
+//             new_srrip_set_miss[i] = {{SRRIP_BITS-1{1'b1}}, 1'b0};
+//         else
+//             new_srrip_set_miss[i] = new_srrip_set_inc[i];
+//     end
+// end
+
+// always @(*) begin
+//     for (int i = 0; i < WAYS; i++)
+//         if (hit)
+//             new_srrip_set[i] = new_srrip_set_hit[i];
+//         else
+//             new_srrip_set[i] = new_srrip_set_miss[i];
+// end
+
+generate
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        assign new_srrip_set_miss[gen_i] = (victim_indicator_i[gen_i])? {{SRRIP_BITS-1{1'b1}}, 1'b0}: new_srrip_set_inc[gen_i];
+        assign new_srrip_set[gen_i] = (hit)? new_srrip_set_hit[gen_i]: new_srrip_set_miss[gen_i];
+    end
+endgenerate
 
 reg [DATA_WIDTH-1:0] dirty_data;
 reg [ADDR_WIDTH-1:0] dirty_addr;
@@ -641,6 +648,22 @@ always @(*) begin
     end
 end
 
+// /* verilator lint_off UNOPTFLAT */
+// wire [DATA_WIDTH-1:0] dirty_data_comb [WAYS-1:0];
+// wire [ADDR_WIDTH-1:0] dirty_addr_comb [WAYS-1:0];
+
+// assign dirty_data_comb[0] = (data_set[0] & {DATA_WIDTH{victim_indicator_i[0]}});
+// assign dirty_addr_comb[0] = {tag_set[0] & {ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH){victim_indicator_i[0]}}, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
+
+
+// generate
+//     for (gen_i = 1; gen_i < WAYS; gen_i++) begin
+//         assign dirty_data_comb[gen_i] = dirty_data_comb[gen_i-1] | (data_set[gen_i] & {DATA_WIDTH{victim_indicator_i[gen_i]}});
+//         assign dirty_addr_comb[gen_i] = dirty_addr_comb[gen_i-1] | {tag_set[gen_i] & {ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH){victim_indicator_i[gen_i]}}, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
+//     end
+// endgenerate
+// /* verilator lint_on UNOPTFLAT */
+
 always @(posedge i_clk) begin
     if (miss & is_victim_dirty & (state == FETCH_REQ | state == WRITE_REQ)) begin
         dirty_data <= dirty_data_comb;
@@ -648,12 +671,7 @@ always @(posedge i_clk) begin
     end
 end
 
-always @(*) begin
-    o_dram_data_o = dirty_data;
-    o_dram_addr = dirty_addr;
-
-    if (internal_state == RECEIVE_DATA)
-        o_dram_addr = internal_addr;
-end
+assign o_dram_data_o = dirty_data;
+assign o_dram_addr = (internal_state == RECEIVE_DATA)? internal_addr: dirty_addr;
 
 endmodule
