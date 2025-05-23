@@ -297,10 +297,11 @@ end
 
 reg [WAYS-1:0] where_to_write_while_write_stage;
 always @(*) begin
-    if (hit)
-        where_to_write_while_write_stage[i] = hit_i[i];
-    else
-        where_to_write_while_write_stage[i] = victim_indicator_i[i];
+    for (int i = 0; i < WAYS; i++)
+        if (hit)
+            where_to_write_while_write_stage[i] = hit_i[i];
+        else
+            where_to_write_while_write_stage[i] = victim_indicator_i[i];
 end
 
 wire is_new_request_fetch = new_request == FETCH_REQ;
