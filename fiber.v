@@ -22,7 +22,7 @@ module fiber #(
 
     // read requests ports
     output  reg     [DATA_WIDTH-1:0]    o_pe_data_o,
-    output  reg                         o_pe_data_o_valid,
+    output  wire                         o_pe_data_o_valid,
     input   wire                        i_pe_data_o_ready,
 
     //////////////////// DRAM CROSS BAR ////////////////////
@@ -97,7 +97,7 @@ wire valid_bits_set        [SETS-1:0][WAYS-1:0];
 // reg  valid_bits_sel          [SETS-1:0][WAYS-1:0];
 wire  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
 wire  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
-reg  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
+wire  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
 genvar gen_i, gen_k;
