@@ -42,7 +42,7 @@ module fiber_read_tb;
     wire                        i_dram_data_o_ready;
 
     // Instantiate the Unit Under Test (UUT)
-    fiberBank #(
+    fiber #(
         .DATA_WIDTH(DATA_WIDTH),
         .SETS(SETS),
         .WAYS(WAYS),

@@ -639,8 +639,8 @@ reg [DATA_WIDTH-1:0] dirty_data_comb;
 reg [ADDR_WIDTH-1:0] dirty_addr_comb;
 
 always @(*) begin
-    dirty_data_comb = 0;
-    dirty_addr_comb = 0;
+    dirty_data_comb = {DATA_WIDTH{1'b0}};
+    dirty_addr_comb = {ADDR_WIDTH{1'b0}};
 
     for (int i = 0; i < WAYS; i++) begin
         dirty_data_comb = dirty_data_comb | (data_set[i] & {DATA_WIDTH{victim_indicator_i[i]}});
