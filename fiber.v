@@ -22,7 +22,7 @@ module fiber #(
 
     // read requests ports
     output  reg     [DATA_WIDTH-1:0]    o_pe_data_o,
-    output  wire                         o_pe_data_o_valid,
+    output  wire                        o_pe_data_o_valid,
     input   wire                        i_pe_data_o_ready,
 
     //////////////////// DRAM CROSS BAR ////////////////////
@@ -70,140 +70,47 @@ reg [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0];
 reg [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0];
 
 
-wire [DATA_WIDTH-1:0] data_write_data;
-wire [WAYS-1:0] data_bank_sel;
-wire data_read_en;
-wire data_write_en;
+// wire [DATA_WIDTH-1:0] data_write_data;
+// wire [WAYS-1:0] data_bank_sel;
+// wire data_read_en;
+// wire data_write_en;
 reg [DATA_WIDTH-1:0] data_set [WAYS-1:0];
 
-wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
-wire [WAYS-1:0] tag_bank_sel;
-wire tag_read_en;
-wire tag_write_en;
+// wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
+// wire [WAYS-1:0] tag_bank_sel;
+// wire tag_read_en;
+// wire tag_write_en;
 
-wire dirty_bits_write_data;
-wire [WAYS-1:0] dirty_bits_bank_sel;
-wire dirty_bits_read_en;
-wire dirty_bits_write_en;
+// wire dirty_bits_write_data;
+// wire [WAYS-1:0] dirty_bits_bank_sel;
+// wire dirty_bits_read_en;
+// wire dirty_bits_write_en;
 
-wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data [WAYS-1:0];
-wire [WAYS-1:0] eviction_meta_info_bank_sel;
-wire eviction_meta_info_read_en;
-wire eviction_meta_info_write_en;
+// wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data [WAYS-1:0];
+// wire [WAYS-1:0] eviction_meta_info_bank_sel;
+// wire eviction_meta_info_read_en;
+// wire eviction_meta_info_write_en;
 
 wire valid_bits_set        [SETS-1:0][WAYS-1:0];
-wire  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
-wire  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
-wire  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
+// wire  valid_bits_read_en      [SETS-1:0][WAYS-1:0];
+// wire  valid_bits_write_en     [SETS-1:0][WAYS-1:0];
+// wire  valid_bits_write_data   [SETS-1:0][WAYS-1:0];
 //=============================================================================
 
-genvar gen_i, gen_k;
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin:sets_blk
-        srambank
-                #(
-                    .ADDRESS($clog2(SETS)),
-                    .DATA(DATA_WIDTH)
-                ) data_array
-                (
-                    .i_clk(i_clk),
-                    .i_address(cur_set),
-                    .i_write_data(data_write_data),
-                    .i_bank_sel(data_bank_sel[gen_i]),
-                    .i_read_en(data_read_en),
-                    .i_write_en(data_write_en),
-                    .o_data_out(data_set[gen_i])
-                );
+genvar gen_i;//, gen_k;
 
-        srambank
-                #(
-                    .ADDRESS($clog2(SETS)),
-                    .DATA(ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH))
-                ) tag_array
-                (
-                    .i_clk(i_clk),
-                    .i_address(cur_set),
-                    .i_write_data(tag_write_data),
-                    .i_bank_sel(tag_bank_sel[gen_i]),
-                    .i_read_en(tag_read_en),
-                    .i_write_en(tag_write_en),
-                    .o_data_out(tag_set[gen_i])
-                );
-
-        srambank
-                #(
-                    .ADDRESS($clog2(SETS)),
-                    .DATA(1)
-                ) dirty_bits_array
-                (
-                    .i_clk(i_clk),
-                    .i_address(cur_set),
-                    .i_write_data(dirty_bits_write_data),
-                    .i_bank_sel(dirty_bits_bank_sel[gen_i]),
-                    .i_read_en(dirty_bits_read_en),
-                    .i_write_en(dirty_bits_write_en),
-                    .o_data_out(dirty_bits_set[gen_i])
-                );
-
-
-        srambank
-                #(
-                    .ADDRESS($clog2(SETS)),
-                    .DATA(SRRIP_BITS+PRIORITY_BITS)
-                ) eviction_meta_info_array
-                (
-                    .i_clk(i_clk),
-                    .i_address(cur_set),
-                    .i_write_data(eviction_meta_info_write_data[gen_i]),
-                    .i_bank_sel(eviction_meta_info_bank_sel[gen_i]),
-                    .i_read_en(eviction_meta_info_read_en),
-                    .i_write_en(eviction_meta_info_write_en),
-                    .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
-                );
-    end
-
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin:valid_ways_blk
-        for (gen_k = 0; gen_k < SETS; gen_k++) begin:valid_sets_blk
-            single_srambank
-                #(
-                    .DATA(1)
-                )
-                valid_bits_array
-                (
-                    .i_clk(i_clk),
-                    .i_write_data(valid_bits_write_data[gen_k][gen_i]),
-                    .i_bank_sel(1'b1),
-                    .i_read_en(valid_bits_read_en[gen_k][gen_i]),
-                    .i_write_en(valid_bits_write_en[gen_k][gen_i]),
-                    .o_data_out(valid_bits_set[gen_k][gen_i])
-                );
-        end
-    end
-endgenerate
-
-reg [ADDR_WIDTH-1:0]    internal_addr;
 
 reg [3:0] state;
 reg [3:0] internal_state;
 reg [WAYS-1:0] insert_data_handler;
-reg [DATA_WIDTH-1:0] internal_data;
-
-always @(posedge i_clk) begin
-    if (o_type_ready) begin
-        internal_addr <= i_addr;
-        internal_data <= i_data;
-    end
-end
 
 assign o_type_ready = ~|state & ~|internal_state;
-
-wire [3:0] nreset_line = {4{i_nreset}};
 
 wire [3:0] new_request = i_request_type & ({4{i_type_valid & o_type_ready & i_nreset}});
 
 always @(posedge i_clk) begin
     if (~i_nreset)
-        state <= nreset_line;
+        state <= NONE;
     else if (~|state)
         state <= new_request;
     else
@@ -211,6 +118,7 @@ always @(posedge i_clk) begin
 end
 
 assign o_pe_data_o_valid = internal_state == SEND_TO_PE;
+wire is_victim_dirty;
 
 always @(posedge i_clk) begin
     if (~i_nreset)
@@ -262,23 +170,11 @@ always @(posedge i_clk) begin
     endcase
 end
 
-reg [DATA_WIDTH-1:0] pe_data_comb;
-
-always @(*) begin
-    pe_data_comb = 0;
-    for (int i = 0; i < WAYS; i++)
-        pe_data_comb = pe_data_comb | (data_set[i] & {DATA_WIDTH{hit_i[i]}});
-end
-
-always @(posedge i_clk) begin
-    if (state == READ_REQ | state == CONSUME_REQ) begin
-        o_pe_data_o <= pe_data_comb;
-    end
-end
-
 assign o_dram_data_o_valid = (internal_state == SEND_DIRTY_VICTIM) | (internal_state == ONLY_SEND_DIRTY_VICTIM);
 
 assign o_dram_data_i_ready = internal_state == RECEIVE_DATA;
+
+wire [WAYS-1:0] victim_indicator_i;
 
 always @(posedge i_clk) begin
     for (int i = 0; i < WAYS; i++)
@@ -286,89 +182,30 @@ always @(posedge i_clk) begin
             insert_data_handler[i] <= victim_indicator_i[i];
 end
 
-wire [WAYS-1:0] where_to_write_while_write_stage;
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++)
-        assign where_to_write_while_write_stage[gen_i] = (hit)? hit_i[gen_i]: victim_indicator_i[gen_i];
-endgenerate
-
-wire is_new_request_fetch = new_request == FETCH_REQ;
-wire is_new_request_read = new_request == READ_REQ;
-wire is_new_request_write = new_request == WRITE_REQ;
+wire is_new_request_fetch   = new_request == FETCH_REQ;
+wire is_new_request_read    = new_request == READ_REQ;
+wire is_new_request_write   = new_request == WRITE_REQ;
 wire is_new_request_consume = new_request == CONSUME_REQ;
 
+wire is_state_fetch     = state == FETCH_REQ;
+wire is_state_read      = state == READ_REQ;
+wire is_state_write     = state == WRITE_REQ;
+wire is_state_consume   = state == CONSUME_REQ;
 
-generate
-    //////////////////// SEL PORTS SIGNING ////////////////////
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign tag_bank_sel[gen_i]      = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[gen_i])
-                                          | is_new_request_read
-                                          | is_new_request_consume
-                                          | is_new_request_write | (miss & state == WRITE_REQ & victim_indicator_i[gen_i]);
-        assign data_bank_sel[gen_i]         = is_new_request_fetch | (i_dram_data_i_valid & o_dram_data_i_ready & insert_data_handler[gen_i])
-                                          | is_new_request_read
-                                          | is_new_request_consume
-                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]);
-        assign eviction_meta_info_bank_sel[gen_i]  = is_new_request_fetch      | (state == FETCH_REQ)
-                                          | is_new_request_read     | (state == READ_REQ)
-                                          | is_new_request_consume  | (state == CONSUME_REQ)
-                                          | is_new_request_write    | (state == WRITE_REQ);
-        assign dirty_bits_bank_sel[gen_i]   = is_new_request_fetch | (miss & state == FETCH_REQ & victim_indicator_i[gen_i])
-                                          | is_new_request_write | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]);
-    end
-    //////////////////// END SEL PORTS SIGNING ////////////////////
-
-    //////////////////// VALID BITS SIGNING ////////////////////
-    for (gen_k = 0; gen_k < SETS; gen_k++) begin
-        for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-            assign valid_bits_read_en[gen_k][gen_i] = (cur_set == gen_k) & (is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write); //1'b0;
-            assign valid_bits_write_en[gen_k][gen_i] = ~i_nreset | ((cur_set == gen_k) & ((miss & state == FETCH_REQ & victim_indicator_i[gen_i]) | (state == CONSUME_REQ & hit_i[gen_i]) | (state == WRITE_REQ & where_to_write_while_write_stage[gen_i]))); //1'b0 | ~i_nreset;
-
-            assign valid_bits_write_data[gen_k][gen_i] = 1'b1 & i_nreset & ~(state == CONSUME_REQ & hit_i[gen_i]);
-        end
-    end
-    //////////////////// END VALID BITS SIGNING ////////////////////
-
-    //////////////////// READ ENABLE SIGNING ////////////////////
-    assign tag_read_en                 = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
-    assign data_read_en                = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
-    assign eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
-    assign dirty_bits_read_en          = is_new_request_fetch | is_new_request_write;
-    //////////////////// END READ ENABLE SIGNING ////////////////////
-
-    //////////////////// WRITE ENABLE SIGNING ////////////////////
-    assign tag_write_en = (miss & state == FETCH_REQ) | (miss & state == WRITE_REQ);
-    // CAUTION (for fetch stage is done)
-    assign data_write_en = (i_dram_data_i_valid & o_dram_data_i_ready) | (state == WRITE_REQ);
-    // CAUTION
-    assign  eviction_meta_info_write_en = (state == FETCH_REQ) | (state == READ_REQ) | (state == WRITE_REQ);
-    assign  dirty_bits_write_en = (miss & state == FETCH_REQ) | (state == WRITE_REQ);
-    //////////////////// END WRITE ENABLE SIGNING ////////////////////
-
-    //////////////////// WRITE DATA SIGNING ////////////////////
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign eviction_meta_info_write_data[gen_i] = {new_priority_set[gen_i], new_srrip_set[gen_i]};
-    end
-    // CAUTION
-    assign tag_write_data = cur_tag;
-    // CAUTION
-    assign dirty_bits_write_data = state == WRITE_REQ;
-
-    // CAUTION
-    assign data_write_data = (internal_state == RECEIVE_DATA)? i_dram_data: internal_data;
-    //////////////////// END WRITE DATA SIGNING ////////////////////
-endgenerate
+wire is_internal_state_receive_data = internal_state == RECEIVE_DATA;
 
 wire [WAYS-1:0] hit_i;
 
-reg [PRIORITY_BITS-1:0] new_priority_set    [WAYS-1:0];
-wire [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
-wire [SRRIP_BITS-1:0]    new_srrip_set_hit   [WAYS-1:0];
-wire [SRRIP_BITS-1:0]    new_srrip_set_miss  [WAYS-1:0];
+reg [PRIORITY_BITS-1:0]  new_priority_set    [WAYS-1:0];
+// wire [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
+// wire [SRRIP_BITS-1:0]    new_srrip_set_hit   [WAYS-1:0];
+// wire [SRRIP_BITS-1:0]    new_srrip_set_miss  [WAYS-1:0];
 wire [SRRIP_BITS-1:0]    new_srrip_set       [WAYS-1:0];
 
 wire [$clog2(SETS)-1:0] incoming_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 wire [$clog2(SETS)-1:0] internal_set = internal_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
+
+wire [WAYS-1:0] where_to_write_while_write_stage;
 
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
@@ -379,120 +216,192 @@ endgenerate
 wire hit = |hit_i;
 wire miss = ~hit;
 
-always @(*) begin
-    for (int i = 0; i < WAYS; i++)
-        if (hit_i[i]) begin
-            // CAUTION
-            if (state == FETCH_REQ)
-                new_priority_set[i] = priority_set[i] + 1;
-            else if (state == READ_REQ)
-                new_priority_set[i] = priority_set[i] - 1;
-            // else if (state == WRITE_REQ)
-            //     new_priority_set[i] = {{PRIORITY_BITS-1{1'b0}}, 1'b1};
-            else
-                new_priority_set[i] = priority_set[i];
-        end
-        // else if (miss & victim_indicator_i[i] & (state == FETCH_REQ | state == WRITE_REQ)) begin
-        else if (miss & victim_indicator_i[i] & state == FETCH_REQ) begin
-        // else if (victim_indicator_i[i]) begin
-            new_priority_set[i] = {{PRIORITY_BITS-1{1'b0}}, 1'b1};
-            // if (state == WRITE_REQ & miss)
-            //     new_priority_set[i] = {PRIORITY_BITS{~victim_indicator_i[i]}};
-            // else
-                // new_priority_set[i] = priority_set[i];
-        end else
-            new_priority_set[i] = priority_set[i];
-end
-
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign new_srrip_set_inc[gen_i] = (srrip_set[gen_i] == {SRRIP_BITS{1'b1}})? srrip_set[gen_i]: srrip_set[gen_i] + 1;
-        assign new_srrip_set_hit[gen_i] = new_srrip_set_inc[gen_i] & {SRRIP_BITS{~hit_i[gen_i]}};
-    end
-endgenerate
-
-reg [PRIORITY_BITS-1:0] min_priority;
-wire [WAYS-1:0]          min_indicator;
-reg [SRRIP_BITS-1:0]    max_srrip;
-wire [WAYS-1:0]          max_srrip_indicator;
-
-always @(*) begin
-    min_priority = {PRIORITY_BITS{1'b1}};
-    for (int i = 0; i < WAYS; i++) begin
-        if (priority_set[i] < min_priority)
-            min_priority = priority_set[i];
-    end
-
-    max_srrip = {SRRIP_BITS{1'b0}};
-    for (int i = 0; i < WAYS; i++) begin
-        if ((srrip_set[i] > max_srrip) & min_indicator[i] == 1'b1)
-            max_srrip = srrip_set[i];
-    end
-end
-
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign max_srrip_indicator[gen_i] = ((srrip_set[gen_i] == max_srrip) & min_indicator[gen_i] == 1'b1);
-        assign min_indicator[gen_i] = (priority_set[gen_i] == min_priority);
-    end
-endgenerate
-
-reg [WAYS-1:0] invalid_bits_line;
-wire is_smth_invalid = |invalid_bits_line;
-
-int first_invalid;
-always @(*) begin
-    first_invalid = 0;
-
-    for (int i = 0; i < WAYS; i++) begin
-        invalid_bits_line[i] = ~valid_bits_set[cur_set][i];
-        if (invalid_bits_line[i] && first_invalid == 0)
-            first_invalid = i + 1;
-    end
-end
-
-wire [WAYS-1:0] is_victim_dirty_i;
-wire [WAYS-1:0] victim_indicator_i;
-wire is_victim_dirty = |is_victim_dirty_i;
-
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign victim_indicator_i[gen_i] = (is_smth_invalid)? (gen_i == (first_invalid-1)): (max_srrip_indicator[gen_i]);
-        assign is_victim_dirty_i[gen_i] = victim_indicator_i[gen_i] & dirty_bits_set[gen_i] & valid_bits_set[cur_set][gen_i];
-    end
-endgenerate
-
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign new_srrip_set_miss[gen_i] = (victim_indicator_i[gen_i])? {{SRRIP_BITS-1{1'b1}}, 1'b0}: new_srrip_set_inc[gen_i];
-        assign new_srrip_set[gen_i] = (hit)? new_srrip_set_hit[gen_i]: new_srrip_set_miss[gen_i];
-    end
-endgenerate
-
-reg [DATA_WIDTH-1:0] dirty_data;
-reg [ADDR_WIDTH-1:0] dirty_addr;
-
-reg [DATA_WIDTH-1:0] dirty_data_comb;
-reg [ADDR_WIDTH-1:0] dirty_addr_comb;
-
-always @(*) begin
-    dirty_data_comb = {DATA_WIDTH{1'b0}};
-    dirty_addr_comb = {ADDR_WIDTH{1'b0}};
-
-    for (int i = 0; i < WAYS; i++) begin
-        dirty_data_comb = dirty_data_comb | (data_set[i] & {DATA_WIDTH{victim_indicator_i[i]}});
-        dirty_addr_comb = dirty_addr_comb | {tag_set[i] & {ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH){victim_indicator_i[i]}}, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
-    end
-end
+reg [ADDR_WIDTH-1:0] internal_addr;
+reg [DATA_WIDTH-1:0] internal_data;
 
 always @(posedge i_clk) begin
-    if (miss & is_victim_dirty & (state == FETCH_REQ | state == WRITE_REQ)) begin
-        dirty_data <= dirty_data_comb;
-        dirty_addr <= dirty_addr_comb;
+    if (o_type_ready) begin
+        internal_addr <= i_addr;
+        internal_data <= i_data;
     end
 end
 
-assign o_dram_data_o = dirty_data;
-assign o_dram_addr = (internal_state == RECEIVE_DATA)? internal_addr: dirty_addr;
+tag_logic #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .ADDR_WIDTH(ADDR_WIDTH)
+) tag_logic_u (
+    .i_clk(i_clk),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_read(is_new_request_read), 
+    .is_new_request_write(is_new_request_write),
+    .is_new_request_consume(is_new_request_consume),
+
+    .miss(miss),
+    .cur_set(cur_set),
+    .victim_indicator_i(victim_indicator_i),
+    .cur_tag(cur_tag),
+    .tag_set(tag_set)
+);
+
+data_logic #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .SETS(SETS),
+    .WAYS(WAYS)
+) data_logic_u (
+    .i_clk(i_clk),
+    .is_state_write(is_state_write),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_read(is_new_request_read),
+    .is_new_request_write(is_new_request_write),
+    .is_new_request_consume(is_new_request_consume),
+    .is_internal_state_receive_data(is_internal_state_receive_data),
+
+    .cur_set(cur_set),
+    .data_set(data_set),
+    .insert_data_handler(insert_data_handler),
+    .where_to_write_while_write_stage(where_to_write_while_write_stage),
+
+    .i_dram_data_i_valid(i_dram_data_i_valid),
+    .o_dram_data_i_ready(o_dram_data_i_ready),
+
+    .internal_data(internal_data),
+    .i_dram_data(i_dram_data)
+); 
+
+emi_logic #(
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .SRRIP_BITS(SRRIP_BITS),
+    .PRIORITY_BITS(PRIORITY_BITS)
+) emi_logic_u (
+    .i_clk(i_clk),
+    .is_state_fetch(is_state_fetch),
+    .is_state_read(is_state_read),
+    .is_state_write(is_state_write),
+    .is_state_consume(is_state_consume),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_read(is_new_request_read), 
+    .is_new_request_write(is_new_request_write),
+    .is_new_request_consume(is_new_request_consume),
+
+    .cur_set(cur_set),
+    .new_srrip_set(new_srrip_set),
+    .new_priority_set(new_priority_set),
+
+    .priority_set(priority_set),
+    .srrip_set(srrip_set)
+);
+
+emi_update #(
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .SRRIP_BITS(SRRIP_BITS),
+    .PRIORITY_BITS(PRIORITY_BITS)
+) emi_update_u (
+    .cur_set(cur_set),
+    .valid_bits_set(valid_bits_set),
+    .dirty_bits_set(dirty_bits_set),
+    .priority_set(priority_set),
+    .srrip_set(srrip_set),
+
+    .is_victim_dirty(is_victim_dirty),
+    .victim_indicator_i(victim_indicator_i)
+);
+
+dirty_logic #(
+    .SETS(SETS),
+    .WAYS(WAYS)
+) dirty_logic_u (
+    .i_clk(i_clk),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_write(is_new_request_write),
+
+    .hit(hit),
+    .miss(miss),
+    .cur_set(cur_set),
+    .hit_i(hit_i),
+    .victim_indicator_i(victim_indicator_i),
+
+    .dirty_bits_set(dirty_bits_set),
+    .where_to_write_while_write_stage(where_to_write_while_write_stage)
+);
+
+inout_handler #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .ADDR_WIDTH(ADDR_WIDTH)
+) inout_handler_u (
+    .i_clk(i_clk),
+    .is_state_fetch(is_state_fetch),
+    .is_state_read(is_state_read),
+    .is_state_write(is_state_write),
+    .is_state_consume(is_state_consume),
+    .is_internal_state_receive_data(is_internal_state_receive_data),
+
+    .miss(miss),
+    .is_victim_dirty(is_victim_dirty),
+    .hit_i(hit_i),
+    .cur_set(cur_set),
+    .victim_indicator_i(victim_indicator_i),
+    .internal_addr(internal_addr),
+    .data_set(data_set),
+    .tag_set(tag_set),
+
+    .o_pe_data_o(o_pe_data_o),
+    .o_dram_data_o(o_dram_data_o),
+    .o_dram_addr(o_dram_addr)
+);
+
+priority_update_logic #(
+    .WAYS(WAYS),
+    .PRIORITY_BITS(PRIORITY_BITS)
+) priority_update_logic_u (
+    .is_state_fetch(is_state_fetch),
+    .is_state_read(is_state_read),
+    .miss(miss),
+    .hit_i(hit_i),
+    .victim_indicator_i(victim_indicator_i),
+    .new_priority_set(new_priority_set),
+    .priority_set(priority_set)
+);
+
+srrip_update_logic #(
+    .WAYS(WAYS),
+    .SRRIP_BITS(SRRIP_BITS)
+) srrip_update_logic_u (
+    .hit(hit),
+    .hit_i(hit_i),
+    .srrip_set(srrip_set),
+    .victim_indicator_i(victim_indicator_i),
+    .new_srrip_set(new_srrip_set)
+);
+
+valid_logic # (
+    .SETS(SETS),
+    .WAYS(WAYS)
+) valid_logic_u (
+    .i_clk(i_clk),
+    .i_nreset(i_nreset),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
+    .is_state_consume(is_state_consume),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_read(is_new_request_read),
+    .is_new_request_write(is_new_request_write),
+    .is_new_request_consume(is_new_request_consume),
+    .hit(hit),
+    .miss(miss),
+    .cur_set(cur_set),
+    .hit_i(hit_i),
+    .victim_indicator_i(victim_indicator_i),
+    .valid_bits_set(valid_bits_set)
+);
 
 endmodule
