@@ -74,7 +74,7 @@ reg [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0];
 // wire [WAYS-1:0] data_bank_sel;
 // wire data_read_en;
 // wire data_write_en;
-reg [DATA_WIDTH-1:0] data_set [WAYS-1:0];
+reg [WAYS-1:0] [DATA_WIDTH-1:0] data_set;
 
 // wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_write_data;
 // wire [WAYS-1:0] tag_bank_sel;

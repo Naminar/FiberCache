@@ -12,7 +12,7 @@ module data_logic #(
     input wire is_internal_state_receive_data,
     
     input wire [$clog2(SETS)-1:0] cur_set,
-    output wire [DATA_WIDTH-1:0] data_set [WAYS-1:0],
+    output wire [WAYS-1:0] [DATA_WIDTH-1:0] data_set,
     input wire [WAYS-1:0] insert_data_handler,
     input wire [WAYS-1:0] where_to_write_while_write_stage,
 
