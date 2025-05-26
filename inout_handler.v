@@ -20,7 +20,7 @@ module inout_handler #(
     input wire [WAYS-1:0] victim_indicator_i,
     input wire [ADDR_WIDTH-1:0] internal_addr,
     input wire [WAYS-1:0] [DATA_WIDTH-1:0] data_set,
-    input wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0],
+    input wire [WAYS-1:0] [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set ,
     
     output reg     [DATA_WIDTH-1:0]    o_pe_data_o,
     output  wire    [DATA_WIDTH-1:0]     o_dram_data_o,

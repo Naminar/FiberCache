@@ -20,7 +20,7 @@ module tag_logic #(
     input wire [$clog2(SETS)-1:0] cur_set,
     input wire [WAYS-1:0] victim_indicator_i,
     input wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag,
-    output wire [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set [WAYS-1:0]
+    output wire [WAYS-1:0] [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set 
 );
 
 wire [WAYS-1:0] tag_bank_sel;

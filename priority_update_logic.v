@@ -9,8 +9,8 @@ module priority_update_logic #(
     input wire [WAYS-1:0] hit_i,
     input wire [WAYS-1:0] victim_indicator_i,
 
-    output reg [PRIORITY_BITS-1:0] new_priority_set    [WAYS-1:0],
-    input wire [PRIORITY_BITS-1:0] priority_set [WAYS-1:0]
+    output reg [WAYS-1:0] [PRIORITY_BITS-1:0] new_priority_set    ,
+    input wire [WAYS-1:0] [PRIORITY_BITS-1:0] priority_set 
 );
     always @(*) begin
     for (int i = 0; i < WAYS; i++)

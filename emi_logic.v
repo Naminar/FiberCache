@@ -15,13 +15,13 @@ module emi_logic #(
     input wire is_new_request_consume,
     
     input wire [$clog2(SETS)-1:0] cur_set,
-    input wire [SRRIP_BITS-1:0]    new_srrip_set       [WAYS-1:0],
-    input wire [PRIORITY_BITS-1:0] new_priority_set    [WAYS-1:0],
-    output wire [PRIORITY_BITS-1:0]             priority_set                [WAYS-1:0],
-    output wire [SRRIP_BITS-1:0]                srrip_set                   [WAYS-1:0]
+    input wire [WAYS-1:0] [SRRIP_BITS-1:0]    new_srrip_set       ,
+    input wire [WAYS-1:0] [PRIORITY_BITS-1:0] new_priority_set    ,
+    output wire [WAYS-1:0] [PRIORITY_BITS-1:0]             priority_set                ,
+    output wire [WAYS-1:0] [SRRIP_BITS-1:0]                srrip_set                   
 );
 
-wire [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data [WAYS-1:0];
+wire [WAYS-1:0] [SRRIP_BITS+PRIORITY_BITS-1:0] eviction_meta_info_write_data ;
 wire [WAYS-1:0] eviction_meta_info_bank_sel;
 wire eviction_meta_info_write_en;
 wire eviction_meta_info_read_en;

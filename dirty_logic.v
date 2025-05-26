@@ -13,7 +13,7 @@ module dirty_logic #(
     input wire [$clog2(SETS)-1:0] cur_set,
     input wire [WAYS-1:0] hit_i,
     input wire [WAYS-1:0] victim_indicator_i,
-    output wire dirty_bits_set [WAYS-1:0],
+    output wire [WAYS-1:0] dirty_bits_set,
     output wire [WAYS-1:0] where_to_write_while_write_stage
 );
 

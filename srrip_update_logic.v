@@ -8,14 +8,14 @@ module srrip_update_logic #(
 ) (
     input wire hit,
     input wire [WAYS-1:0]           hit_i,
-    input wire [SRRIP_BITS-1:0]     srrip_set           [WAYS-1:0],
+    input wire [WAYS-1:0] [SRRIP_BITS-1:0]     srrip_set           ,
     input wire [WAYS-1:0]           victim_indicator_i,
-    output wire [SRRIP_BITS-1:0]    new_srrip_set       [WAYS-1:0]
+    output wire [WAYS-1:0] [SRRIP_BITS-1:0]    new_srrip_set      
 );
 
-    wire [SRRIP_BITS-1:0]    new_srrip_set_inc   [WAYS-1:0];
-    wire [SRRIP_BITS-1:0]    new_srrip_set_hit   [WAYS-1:0];
-    wire [SRRIP_BITS-1:0]    new_srrip_set_miss  [WAYS-1:0];
+    wire [WAYS-1:0] [SRRIP_BITS-1:0]    new_srrip_set_inc   ;
+    wire [WAYS-1:0] [SRRIP_BITS-1:0]    new_srrip_set_hit   ;
+    wire [WAYS-1:0] [SRRIP_BITS-1:0]    new_srrip_set_miss  ;
 
     genvar gen_i;
     generate

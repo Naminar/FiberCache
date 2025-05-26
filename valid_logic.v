@@ -22,15 +22,26 @@ module valid_logic #(
     input wire [$clog2(SETS)-1:0] cur_set,
     input wire [WAYS-1:0] hit_i,
     input wire [WAYS-1:0] victim_indicator_i,
-    output wire valid_bits_set             [SETS-1:0][WAYS-1:0]
+    // output wire [SETS-1:0][WAYS-1:0] valid_bits_set,
+    output wire [WAYS-1:0] cur_valid_bits_line
+
 );
 
-wire  valid_bits_read_en        [SETS-1:0][WAYS-1:0];
-wire  valid_bits_write_en       [SETS-1:0][WAYS-1:0];
-wire  valid_bits_write_data     [SETS-1:0][WAYS-1:0];
+wire  [SETS-1:0][WAYS-1:0] valid_bits_read_en        ;
+wire  [SETS-1:0][WAYS-1:0] valid_bits_write_en       ;
+wire  [SETS-1:0][WAYS-1:0] valid_bits_write_data     ;
 wire [WAYS-1:0] where_to_write_while_write_stage;
 
+wire [SETS-1:0][WAYS-1:0] valid_bits_set;
+
 genvar gen_i, gen_k;
+
+assign cur_valid_bits_line = valid_bits_set[cur_set];
+// generate
+//     for (gen_i = 0; gen_i < WAYS; gen_i++)
+//         assign cur_valid_bits_line = valid_bits_set[cur_set][i];
+// endgenerate
+
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
         for (gen_k = 0; gen_k < SETS; gen_k++) begin
