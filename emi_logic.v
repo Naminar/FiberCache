@@ -28,10 +28,30 @@ wire eviction_meta_info_read_en;
 assign eviction_meta_info_read_en  = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
 assign  eviction_meta_info_write_en = (is_state_fetch) | (is_state_read) | (is_state_write);
 
-genvar gen_i, gen_k;
+// genvar gen_i, gen_k;
+// generate
+//     for (gen_i = 0; gen_i < WAYS; gen_i++) begin:valid_ways_blk
+//         for (gen_k = 0; gen_k < SETS; gen_k++) begin:valid_sets_blk
+//         srambank
+//                 #(
+//                     .ADDRESS($clog2(SETS)),
+//                     .DATA(SRRIP_BITS+PRIORITY_BITS)
+//                 ) eviction_meta_info_array
+//                 (
+//                     .i_clk(i_clk),
+//                     .i_address(cur_set),
+//                     .i_write_data(eviction_meta_info_write_data[gen_i]),
+//                     .i_bank_sel(eviction_meta_info_bank_sel[gen_i]),
+//                     .i_read_en(eviction_meta_info_read_en),
+//                     .i_write_en(eviction_meta_info_write_en),
+//                     .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
+//                 );
+//         end
+//     end
+// endgenerate
+genvar gen_i;
 generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin:valid_ways_blk
-        for (gen_k = 0; gen_k < SETS; gen_k++) begin:valid_sets_blk
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
         srambank
                 #(
                     .ADDRESS($clog2(SETS)),
@@ -46,11 +66,8 @@ generate
                     .i_write_en(eviction_meta_info_write_en),
                     .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
                 );
-        end
     end
 endgenerate
-
-
 
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
