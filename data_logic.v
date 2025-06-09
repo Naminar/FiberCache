@@ -1,4 +1,5 @@
 module data_logic #(
+    BIT_SIZE=8,
     DATA_WIDTH=16,
     SETS=256,
     WAYS=16
@@ -18,16 +19,16 @@ module data_logic #(
     input  wire i_dram_data_i_valid,
     input  wire o_dram_data_i_ready,
 
-    input wire  [DATA_WIDTH-1:0]    internal_data,
-    input wire  [DATA_WIDTH-1:0]    i_dram_data
+    input wire  [DATA_WIDTH*BIT_SIZE-1:0]    internal_data,
+    input wire  [DATA_WIDTH*BIT_SIZE-1:0]    i_dram_data,
 
-    output wire [WAYS-1:0] [DATA_WIDTH-1:0] data_set,
+    output wire [WAYS-1:0] [DATA_WIDTH*BIT_SIZE-1:0] data_set
 );
 
 wire data_read_en                       = is_new_request_fetch | is_new_request_read | is_new_request_consume | is_new_request_write;
 wire data_write_en                      = (i_dram_data_i_valid & o_dram_data_i_ready) | (is_state_write);
 
-wire [DATA_WIDTH-1:0] data_write_data   = (is_internal_state_receive_data)?
+wire [DATA_WIDTH*BIT_SIZE-1:0] data_write_data   = (is_internal_state_receive_data)?
                                                 i_dram_data
                                             :
                                                 internal_data;
@@ -47,7 +48,7 @@ generate
 for (gen_i = 0; gen_i < WAYS; gen_i++) begin
     srambank #(
         .ADDRESS($clog2(SETS)),
-        .DATA(DATA_WIDTH)
+        .DATA(DATA_WIDTH*BIT_SIZE)
     ) data_array (
         .i_clk(i_clk),
         .i_address(cur_set),

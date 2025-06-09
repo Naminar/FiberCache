@@ -18,10 +18,10 @@ module fiber #(
     output  wire                        o_type_ready,
 
     // insert requests ports
-    input   wire    [DATA_WIDTH-1:0]    i_data,
+    input   wire    [DATA_WIDTH*BIT_SIZE-1:0]    i_data,
 
     // read requests ports
-    output  reg     [DATA_WIDTH-1:0]    o_pe_data_o,
+    output  reg     [DATA_WIDTH*BIT_SIZE-1:0]    o_pe_data_o,
     output  wire                        o_pe_data_o_valid,
     input   wire                        i_pe_data_o_ready,
 
@@ -29,16 +29,17 @@ module fiber #(
     output   reg    [ADDR_WIDTH-1:0]    o_dram_addr,
 
     // inbox requests ports
-    input   wire    [DATA_WIDTH-1:0]    i_dram_data,
+    input   wire    [DATA_WIDTH*BIT_SIZE-1:0]    i_dram_data,
     input   wire                        i_dram_data_i_valid,
     output  wire                        o_dram_data_i_ready,
 
     // outbox requests ports
-    output  wire    [DATA_WIDTH-1:0]     o_dram_data_o,
+    output  wire    [DATA_WIDTH*BIT_SIZE-1:0]     o_dram_data_o,
     output  wire                        o_dram_data_o_valid,
     input   wire                        i_dram_data_o_ready
 );
 
+localparam BIT_SIZE     = 8; 
 localparam FETCH_REQ    = 4'b0001;
 localparam READ_REQ     = 4'b0010;
 localparam WRITE_REQ    = 4'b0100;
@@ -71,7 +72,7 @@ wire [WAYS-1:0]                         dirty_bits_set;
 wire [WAYS-1:0] [PRIORITY_BITS-1:0]     priority_set;
 wire [WAYS-1:0] [SRRIP_BITS-1:0]        srrip_set;
 
-reg     [WAYS-1:0] [DATA_WIDTH-1:0] data_set;
+reg     [WAYS-1:0] [DATA_WIDTH*BIT_SIZE-1:0] data_set;
 wire    [WAYS-1:0] cur_valid_bits_line;
 
 genvar gen_i;
@@ -182,7 +183,7 @@ wire hit = |hit_i;
 wire miss = ~hit;
 
 reg [ADDR_WIDTH-1:0] internal_addr;
-reg [DATA_WIDTH-1:0] internal_data;
+reg [DATA_WIDTH*BIT_SIZE-1:0] internal_data;
 
 always @(posedge i_clk) begin
     if (o_type_ready) begin
@@ -213,6 +214,7 @@ tag_logic #(
 );
 
 data_logic #(
+    .BIT_SIZE(BIT_SIZE),
     .DATA_WIDTH(DATA_WIDTH),
     .SETS(SETS),
     .WAYS(WAYS)
@@ -296,6 +298,7 @@ dirty_logic #(
 );
 
 inout_handler #(
+    .BIT_SIZE(BIT_SIZE),
     .DATA_WIDTH(DATA_WIDTH),
     .SETS(SETS),
     .WAYS(WAYS),
