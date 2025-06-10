@@ -1,8 +1,7 @@
-To create SRAM cells
+To patch SRAM generator and create cells  
 ```
 make
 ```
-
 
 ```
 verilator -Wall --lint-only -top-module fiber *.v
