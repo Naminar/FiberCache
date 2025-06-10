@@ -36,17 +36,27 @@ endgenerate
 
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        srambank #(
-            .ADDRESS($clog2(SETS)),
-            .DATA(1)
-        ) dirty_bits_array (
-            .i_clk(i_clk),
-            .i_address(cur_set),
-            .i_write_data(dirty_bits_write_data),
-            .i_bank_sel(dirty_bits_bank_sel[gen_i]),
-            .i_read_en(dirty_bits_read_en),
-            .i_write_en(dirty_bits_write_en),
-            .o_data_out(dirty_bits_set[gen_i])
+        // srambank #(
+        //     .ADDRESS($clog2(SETS)),
+        //     .DATA(1)
+        // ) dirty_bits_array (
+        //     .i_clk(i_clk),
+        //     .i_address(cur_set),
+        //     .i_write_data(dirty_bits_write_data),
+        //     .i_bank_sel(dirty_bits_bank_sel[gen_i]),
+        //     .i_read_en(dirty_bits_read_en),
+        //     .i_write_en(dirty_bits_write_en),
+        //     .o_data_out(dirty_bits_set[gen_i])
+        // );
+
+        fakeram7_1x256_dirty_logic dirty_bits_array (
+            .rd_out(dirty_bits_set[gen_i]),
+            .addr_in(cur_set),
+            .we_in(dirty_bits_write_en),
+            // CAUTION: sram cell do not properly work
+            .wd_in(dirty_bits_write_data),
+            .clk(i_clk),
+            .ce_in((dirty_bits_write_en | dirty_bits_read_en) & dirty_bits_bank_sel[gen_i])
         );
     end
 endgenerate

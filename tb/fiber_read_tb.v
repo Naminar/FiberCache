@@ -9,6 +9,7 @@ module fiber_read_tb;
     localparam ADDR_WIDTH = 64; // 64 bit address
     localparam SRRIP_BITS=2;
     localparam PRIORITY_BITS=5;
+    localparam BIT_SIZE=8;
 
     localparam FETCH_REQ    = 4'b0001;
     localparam READ_REQ     = 4'b0010;
