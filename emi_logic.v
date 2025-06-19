@@ -46,17 +46,27 @@ endgenerate
 
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        srambank #(
-            .ADDRESS($clog2(SETS)),
-            .DATA(SRRIP_BITS+PRIORITY_BITS)
-        ) eviction_meta_info_array (
-            .i_clk(i_clk),
-            .i_address(cur_set),
-            .i_write_data(eviction_meta_info_write_data[gen_i]),
-            .i_bank_sel(eviction_meta_info_bank_sel[gen_i]),
-            .i_read_en(eviction_meta_info_read_en),
-            .i_write_en(eviction_meta_info_write_en),
-            .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
+        // srambank #(
+        //     .ADDRESS($clog2(SETS)),
+        //     .DATA(SRRIP_BITS+PRIORITY_BITS)
+        // ) eviction_meta_info_array (
+        //     .i_clk(i_clk),
+        //     .i_address(cur_set),
+        //     .i_write_data(eviction_meta_info_write_data[gen_i]),
+        //     .i_bank_sel(eviction_meta_info_bank_sel[gen_i]),
+        //     .i_read_en(eviction_meta_info_read_en),
+        //     .i_write_en(eviction_meta_info_write_en),
+        //     .o_data_out({priority_set[gen_i], srrip_set[gen_i]})
+        // );
+
+        fakeram7_7x256_emi_logic eviction_meta_info_array (
+            .rd_out({priority_set[gen_i], srrip_set[gen_i]}),
+            .addr_in(cur_set),
+            .we_in(eviction_meta_info_write_en),
+            // CAUTION: sram cell do not properly work
+            .wd_in(eviction_meta_info_write_data[gen_i]),
+            .clk(i_clk),
+            .ce_in((eviction_meta_info_write_en | eviction_meta_info_read_en) & eviction_meta_info_bank_sel[gen_i])
         );
     end
 endgenerate

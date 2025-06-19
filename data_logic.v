@@ -45,20 +45,29 @@ generate
 endgenerate
 
 generate
-for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-    srambank #(
-        .ADDRESS($clog2(SETS)),
-        .DATA(DATA_WIDTH*BIT_SIZE)
-    ) data_array (
-        .i_clk(i_clk),
-        .i_address(cur_set),
-        .i_write_data(data_write_data),
-        .i_bank_sel(data_bank_sel[gen_i]),
-        .i_read_en(data_read_en),
-        .i_write_en(data_write_en),
-        .o_data_out(data_set[gen_i])
-    );
-end
+    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+        // srambank #(
+        //     .ADDRESS($clog2(SETS)),
+        //     .DATA(DATA_WIDTH*BIT_SIZE)
+        // ) data_array (
+        //     .i_clk(i_clk),
+        //     .i_address(cur_set),
+        //     .i_write_data(data_write_data),
+        //     .i_bank_sel(data_bank_sel[gen_i]),
+        //     .i_read_en(data_read_en),
+        //     .i_write_en(data_write_en),
+        //     .o_data_out(data_set[gen_i])
+        // );
+        fakeram7_128x256_data_logic data_array (
+            .rd_out(data_set[gen_i]),
+            .addr_in(cur_set),
+            .we_in(data_write_en),
+            // CAUTION: sram cell do not properly work
+            .wd_in(data_write_data),
+            .clk(i_clk),
+            .ce_in((data_write_en | data_read_en) & data_bank_sel[gen_i])
+        );
+    end
 endgenerate
 
 endmodule
