@@ -53,11 +53,11 @@ localparam ONLY_SEND_DIRTY_VICTIM   = 4'b1000;
 localparam NONE                     = 4'b0000;
 
 //-----------------------------------------------------------
-//|    |   bank     |     256 sets      | 16 bytes in line  |
+//|      bank       |     256 sets      | 16 bytes in line  |
 //-----------------------------------------------------------
 //|tag array (64-12)|      8 bits       |       4 bits      |
 //-----------------------------------------------------------
-//|      [63:12]    |      [11:4]       |        [3:0]      |
+//|     [63:12]     |      [11:4]       |        [3:0]      |
 //-----------------------------------------------------------
 
 wire [$clog2(SETS)-1:0] cur_set = (|{state,internal_state})?
@@ -179,14 +179,14 @@ wire [$clog2(SETS)-1:0] incoming_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)
 wire [$clog2(SETS)-1:0] internal_set = internal_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 
 wire [WAYS-1:0] where_to_write_while_write_stage;
-generate
-    for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-        assign hit_i[gen_i] = (cur_tag == tag_set[gen_i]) & cur_valid_bits_line[gen_i];
-    end
-endgenerate
+// generate
+//     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
+//         assign hit_i[gen_i] = (cur_tag == tag_set[gen_i]) & cur_valid_bits_line[gen_i];
+//     end
+// endgenerate
 
-wire hit = |hit_i;
-wire miss = ~hit;
+// wire hit = |hit_i;
+// wire miss = ~hit;
 
 reg [ADDR_WIDTH-1:0] internal_addr;
 reg [DATA_WIDTH*BIT_SIZE-1:0] internal_data;
