@@ -157,10 +157,10 @@ wire is_new_request_read    = new_request[1]; // == READ_REQ;
 wire is_new_request_write   = new_request[2]; // == WRITE_REQ;
 wire is_new_request_consume = new_request[3]; // == CONSUME_REQ;
 
-wire is_it_new_request    =   is_new_request_fetch
-                            | is_new_request_read
-                            | is_new_request_consume
-                            | is_new_request_write;
+// wire is_it_new_request    =   is_new_request_fetch
+//                             | is_new_request_read
+//                             | is_new_request_consume
+//                             | is_new_request_write;
 
 
 wire is_state_fetch     = state[0]; // == FETCH_REQ;
@@ -179,14 +179,6 @@ wire [$clog2(SETS)-1:0] incoming_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)
 wire [$clog2(SETS)-1:0] internal_set = internal_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 
 wire [WAYS-1:0] where_to_write_while_write_stage;
-// generate
-//     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
-//         assign hit_i[gen_i] = (cur_tag == tag_set[gen_i]) & cur_valid_bits_line[gen_i];
-//     end
-// endgenerate
-
-// wire hit = |hit_i;
-// wire miss = ~hit;
 
 reg [ADDR_WIDTH-1:0] internal_addr;
 reg [DATA_WIDTH*BIT_SIZE-1:0] internal_data;
@@ -198,6 +190,33 @@ always @(posedge i_clk) begin
     end
 end
 
+
+tag_logic_fix #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .SRRIP_BITS(SRRIP_BITS),
+    .PRIORITY_BITS(PRIORITY_BITS)
+) tag_logic_fix_u (
+    .i_clk(i_clk),
+    .i_nreset(i_nreset),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
+    .is_state_read(is_state_read),
+    .is_state_consume(is_state_consume),
+    .is_new_request_fetch(is_new_request_fetch),
+    .is_new_request_read(is_new_request_read),
+    .is_new_request_write(is_new_request_write),
+    .is_new_request_consume(is_new_request_consume),
+
+    .cur_set(cur_set),
+    .cur_tag(cur_tag),
+    .where_to_write_while_write_stage(where_to_write_while_write_stage),
+    .hit_i(hit_i),
+    .victim_indicator_i(victim_indicator_i),
+    .miss(miss)
+);
 
 data_logic #(
     .BIT_SIZE(BIT_SIZE),
@@ -252,6 +271,5 @@ inout_handler #(
     .o_dram_data_o(o_dram_data_o),
     .o_dram_addr(o_dram_addr)
 );
-
 
 endmodule
