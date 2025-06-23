@@ -39,7 +39,7 @@ module fiber #(
     input   wire                        i_dram_data_o_ready
 );
 
-localparam BIT_SIZE     = 8; 
+localparam BIT_SIZE     = 8;
 localparam FETCH_REQ    = 4'b0001;
 localparam READ_REQ     = 4'b0010;
 localparam WRITE_REQ    = 4'b0100;
@@ -152,15 +152,21 @@ always @(posedge i_clk) begin
             insert_data_handler[i] <= victim_indicator_i[i];
 end
 
-wire is_new_request_fetch   = new_request == FETCH_REQ;
-wire is_new_request_read    = new_request == READ_REQ;
-wire is_new_request_write   = new_request == WRITE_REQ;
-wire is_new_request_consume = new_request == CONSUME_REQ;
+wire is_new_request_fetch   = new_request[0]; // == FETCH_REQ;
+wire is_new_request_read    = new_request[1]; // == READ_REQ;
+wire is_new_request_write   = new_request[2]; // == WRITE_REQ;
+wire is_new_request_consume = new_request[3]; // == CONSUME_REQ;
 
-wire is_state_fetch     = state == FETCH_REQ;
-wire is_state_read      = state == READ_REQ;
-wire is_state_write     = state == WRITE_REQ;
-wire is_state_consume   = state == CONSUME_REQ;
+wire is_it_new_request    =   is_new_request_fetch
+                            | is_new_request_read
+                            | is_new_request_consume
+                            | is_new_request_write;
+
+
+wire is_state_fetch     = state[0]; // == FETCH_REQ;
+wire is_state_read      = state[1]; // == READ_REQ;
+wire is_state_write     = state[2]; // == WRITE_REQ;
+wire is_state_consume   = state[3]; // == CONSUME_REQ;
 
 wire is_internal_state_receive_data = internal_state == RECEIVE_DATA;
 
@@ -192,26 +198,6 @@ always @(posedge i_clk) begin
     end
 end
 
-tag_logic #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .SETS(SETS),
-    .WAYS(WAYS),
-    .ADDR_WIDTH(ADDR_WIDTH)
-) tag_logic_u (
-    .i_clk(i_clk),
-    .is_state_fetch(is_state_fetch),
-    .is_state_write(is_state_write),
-    .is_new_request_fetch(is_new_request_fetch),
-    .is_new_request_read(is_new_request_read),
-    .is_new_request_write(is_new_request_write),
-    .is_new_request_consume(is_new_request_consume),
-
-    .miss(miss),
-    .cur_set(cur_set),
-    .victim_indicator_i(victim_indicator_i),
-    .cur_tag(cur_tag),
-    .tag_set(tag_set)
-);
 
 data_logic #(
     .BIT_SIZE(BIT_SIZE),
@@ -237,64 +223,6 @@ data_logic #(
 
     .internal_data(internal_data),
     .i_dram_data(i_dram_data)
-);
-
-emi_logic #(
-    .SETS(SETS),
-    .WAYS(WAYS),
-    .SRRIP_BITS(SRRIP_BITS),
-    .PRIORITY_BITS(PRIORITY_BITS)
-) emi_logic_u (
-    .i_clk(i_clk),
-    .is_state_fetch(is_state_fetch),
-    .is_state_read(is_state_read),
-    .is_state_write(is_state_write),
-    .is_state_consume(is_state_consume),
-    .is_new_request_fetch(is_new_request_fetch),
-    .is_new_request_read(is_new_request_read),
-    .is_new_request_write(is_new_request_write),
-    .is_new_request_consume(is_new_request_consume),
-
-    .cur_set(cur_set),
-    .new_srrip_set(new_srrip_set),
-    .new_priority_set(new_priority_set),
-
-    .priority_set(priority_set),
-    .srrip_set(srrip_set)
-);
-
-emi_update #(
-    .WAYS(WAYS),
-    .SRRIP_BITS(SRRIP_BITS),
-    .PRIORITY_BITS(PRIORITY_BITS)
-) emi_update_u (
-    .cur_valid_bits_line(cur_valid_bits_line),
-    .dirty_bits_set(dirty_bits_set),
-    .priority_set(priority_set),
-    .srrip_set(srrip_set),
-
-    .is_victim_dirty(is_victim_dirty),
-    .victim_indicator_i(victim_indicator_i)
-);
-
-dirty_logic #(
-    .SETS(SETS),
-    .WAYS(WAYS)
-) dirty_logic_u (
-    .i_clk(i_clk),
-    .is_state_fetch(is_state_fetch),
-    .is_state_write(is_state_write),
-    .is_new_request_fetch(is_new_request_fetch),
-    .is_new_request_write(is_new_request_write),
-
-    .hit(hit),
-    .miss(miss),
-    .cur_set(cur_set),
-    .hit_i(hit_i),
-    .victim_indicator_i(victim_indicator_i),
-
-    .dirty_bits_set(dirty_bits_set),
-    .where_to_write_while_write_stage(where_to_write_while_write_stage)
 );
 
 inout_handler #(
@@ -325,49 +253,5 @@ inout_handler #(
     .o_dram_addr(o_dram_addr)
 );
 
-priority_update_logic #(
-    .WAYS(WAYS),
-    .PRIORITY_BITS(PRIORITY_BITS)
-) priority_update_logic_u (
-    .is_state_fetch(is_state_fetch),
-    .is_state_read(is_state_read),
-    .miss(miss),
-    .hit_i(hit_i),
-    .victim_indicator_i(victim_indicator_i),
-    .new_priority_set(new_priority_set),
-    .priority_set(priority_set)
-);
-
-srrip_update_logic #(
-    .WAYS(WAYS),
-    .SRRIP_BITS(SRRIP_BITS)
-) srrip_update_logic_u (
-    .hit(hit),
-    .hit_i(hit_i),
-    .srrip_set(srrip_set),
-    .victim_indicator_i(victim_indicator_i),
-    .new_srrip_set(new_srrip_set)
-);
-
-valid_logic # (
-    .SETS(SETS),
-    .WAYS(WAYS)
-) valid_logic_u (
-    .i_clk(i_clk),
-    .i_nreset(i_nreset),
-    .is_state_fetch(is_state_fetch),
-    .is_state_write(is_state_write),
-    .is_state_consume(is_state_consume),
-    .is_new_request_fetch(is_new_request_fetch),
-    .is_new_request_read(is_new_request_read),
-    .is_new_request_write(is_new_request_write),
-    .is_new_request_consume(is_new_request_consume),
-    .hit(hit),
-    .miss(miss),
-    .cur_set(cur_set),
-    .hit_i(hit_i),
-    .victim_indicator_i(victim_indicator_i),
-    .cur_valid_bits_line(cur_valid_bits_line)
-);
 
 endmodule
