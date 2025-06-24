@@ -27,21 +27,43 @@ module inout_handler #(
     output  wire    [DATA_WIDTH*BIT_SIZE-1:0]    o_dram_data_o,
     output  wire    [ADDR_WIDTH-1:0]    o_dram_addr
 );
-reg [DATA_WIDTH*BIT_SIZE-1:0] dirty_data;
-reg [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_comb;
-reg [DATA_WIDTH*BIT_SIZE-1:0] pe_data_comb;
-reg [ADDR_WIDTH-1:0] dirty_addr;
-reg [ADDR_WIDTH-1:0] dirty_addr_comb;
 
-always @(*) begin
-    dirty_data_comb = {DATA_WIDTH*BIT_SIZE{1'b0}};
-    dirty_addr_comb = {ADDR_WIDTH{1'b0}};
+localparam TAG_WIDTH = ADDR_WIDTH - $clog2(SETS) - $clog2(DATA_WIDTH);
 
-    for (int i = 0; i < WAYS; i++) begin
-        dirty_data_comb = dirty_data_comb | (data_set[i] & {DATA_WIDTH*BIT_SIZE{victim_indicator_i[i]}});
-        dirty_addr_comb = dirty_addr_comb | {tag_set[i] & {ADDR_WIDTH-$clog2(SETS)-$clog2(DATA_WIDTH){victim_indicator_i[i]}}, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
-    end
+
+wire [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_or [WAYS:0];
+assign dirty_data_or[0] = {DATA_WIDTH*BIT_SIZE{1'b0}};
+generate
+for (genvar i = 0; i < WAYS; i++) begin : gen_dirty_data
+    assign dirty_data_or[i+1] = dirty_data_or[i] | (data_set[i] & {DATA_WIDTH*BIT_SIZE{victim_indicator_i[i]}});
 end
+endgenerate
+wire [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_comb = dirty_data_or[WAYS];
+
+
+wire [TAG_WIDTH-1:0] tag_or [WAYS:0];
+assign tag_or[0] = {TAG_WIDTH{1'b0}};
+generate
+for (genvar i = 0; i < WAYS; i++) begin : gen_tag
+    assign tag_or[i+1] = tag_or[i] | (tag_set[i] & {TAG_WIDTH{victim_indicator_i[i]}});
+end
+endgenerate
+wire [TAG_WIDTH-1:0] selected_tag = tag_or[WAYS];
+wire [ADDR_WIDTH-1:0] dirty_addr_comb = {selected_tag, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
+
+
+wire [DATA_WIDTH*BIT_SIZE-1:0] pe_data_or [WAYS:0];
+assign pe_data_or[0] = {DATA_WIDTH*BIT_SIZE{1'b0}};
+generate
+for (genvar i = 0; i < WAYS; i++) begin : gen_pe_data
+    assign pe_data_or[i+1] = pe_data_or[i] | (data_set[i] & {DATA_WIDTH*BIT_SIZE{hit_i[i]}});
+end
+endgenerate
+wire [DATA_WIDTH*BIT_SIZE-1:0] pe_data_comb = pe_data_or[WAYS];
+
+
+reg [DATA_WIDTH*BIT_SIZE-1:0] dirty_data;
+reg [ADDR_WIDTH-1:0] dirty_addr;
 
 always @(posedge i_clk) begin
     if (miss & is_victim_dirty & (is_state_fetch | is_state_write)) begin
@@ -50,22 +72,14 @@ always @(posedge i_clk) begin
     end
 end
 
-always @(*) begin
-    pe_data_comb = 0;
-    for (int i = 0; i < WAYS; i++)
-        pe_data_comb = pe_data_comb | (data_set[i] & {DATA_WIDTH*BIT_SIZE{hit_i[i]}});
-end
-
 always @(posedge i_clk) begin
     if (is_state_read | is_state_consume) begin
         o_pe_data_o <= pe_data_comb;
     end
 end
 
+
 assign o_dram_data_o = dirty_data;
-assign o_dram_addr = (is_internal_state_receive_data)?
-                            internal_addr
-                        :
-                            dirty_addr;
+assign o_dram_addr = (is_internal_state_receive_data) ? internal_addr : dirty_addr;
 
 endmodule
