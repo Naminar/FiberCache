@@ -68,17 +68,19 @@ wire [$clog2(SETS)-1:0] cur_set = (|{state,internal_state})?
 wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] cur_tag = internal_addr[ADDR_WIDTH-1:$clog2(DATA_WIDTH)+$clog2(SETS)];
 wire [WAYS-1:0] [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] tag_set;
 
-wire [WAYS-1:0]                         dirty_bits_set;
-wire [WAYS-1:0] [PRIORITY_BITS-1:0]     priority_set;
-wire [WAYS-1:0] [SRRIP_BITS-1:0]        srrip_set;
+// wire [WAYS-1:0]                         dirty_bits_set;
+// wire [WAYS-1:0] [PRIORITY_BITS-1:0]     priority_set;
+// wire [WAYS-1:0] [SRRIP_BITS-1:0]        srrip_set;
 
 reg     [WAYS-1:0] [DATA_WIDTH*BIT_SIZE-1:0] data_set;
-wire    [WAYS-1:0] cur_valid_bits_line;
+// wire    [WAYS-1:0] cur_valid_bits_line;
 
-genvar gen_i;
+// genvar gen_i;
 reg [3:0] state;
 reg [3:0] internal_state;
 reg [WAYS-1:0] insert_data_handler;
+
+wire miss;
 
 assign o_type_ready = ~|state & ~|internal_state;
 
@@ -172,8 +174,8 @@ wire is_internal_state_receive_data = internal_state == RECEIVE_DATA;
 
 wire [WAYS-1:0] hit_i;
 
-reg     [WAYS-1:0] [PRIORITY_BITS-1:0]  new_priority_set;
-wire    [WAYS-1:0] [SRRIP_BITS-1:0]     new_srrip_set;
+// reg     [WAYS-1:0] [PRIORITY_BITS-1:0]  new_priority_set;
+// wire    [WAYS-1:0] [SRRIP_BITS-1:0]     new_srrip_set;
 
 wire [$clog2(SETS)-1:0] incoming_set = i_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
 wire [$clog2(SETS)-1:0] internal_set = internal_addr[$clog2(DATA_WIDTH) +: $clog2(SETS)];
@@ -215,7 +217,9 @@ tag_logic_fix #(
     .where_to_write_while_write_stage(where_to_write_while_write_stage),
     .hit_i(hit_i),
     .victim_indicator_i(victim_indicator_i),
-    .miss(miss)
+    .miss(miss),
+    .addr_bits_rd(tag_set),
+    .is_victim_dirty(is_victim_dirty)
 );
 
 data_logic #(

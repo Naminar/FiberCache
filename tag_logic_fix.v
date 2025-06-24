@@ -25,7 +25,9 @@ module tag_logic_fix #(
     output wire [WAYS-1:0] where_to_write_while_write_stage,
     output wire [WAYS-1:0] hit_i,
     output wire [WAYS-1:0] victim_indicator_i,
-    output wire miss
+    output wire miss,
+    output wire [WAYS-1:0] [ADDR_WIDTH-1-$clog2(SETS)-$clog2(DATA_WIDTH):0] addr_bits_rd,
+    output wire is_victim_dirty
     // input wire [WAYS-1:0]   victim_indicator_i,
     // input wire [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] partial_address,
 );
@@ -65,8 +67,6 @@ wire [WAYS-1:0] [SRRIP_BITS-1:0]        new_srrip_set;
 
 
 // wire [WAYS-1:0] victim_indicator_i;
-wire is_victim_dirty;
-
 
 genvar gen_i;
 generate
@@ -118,7 +118,7 @@ endgenerate
 
 
 
-wire [WAYS-1:0] [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] addr_bits_rd;
+// wire [WAYS-1:0] [ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0] addr_bits_rd;
 generate
     for (gen_i = 0; gen_i < WAYS; gen_i++) begin
         assign addr_bits_rd[gen_i] = tag_rd[gen_i][ADDR_WIDTH-$clog2(DATA_WIDTH)-$clog2(SETS)-1:0];
