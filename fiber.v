@@ -248,31 +248,78 @@ data_logic #(
     .i_dram_data(i_dram_data)
 );
 
-inout_handler #(
+// inout_handler #(
+//     .BIT_SIZE(BIT_SIZE),
+//     .DATA_WIDTH(DATA_WIDTH),
+//     .SETS(SETS),
+//     .WAYS(WAYS),
+//     .ADDR_WIDTH(ADDR_WIDTH)
+// ) inout_handler_u (
+//     .i_clk(i_clk),
+//     .is_state_fetch(is_state_fetch),
+//     .is_state_read(is_state_read),
+//     .is_state_write(is_state_write),
+//     .is_state_consume(is_state_consume),
+//     .is_internal_state_receive_data(is_internal_state_receive_data),
+
+//     .miss(miss),
+//     .is_victim_dirty(is_victim_dirty),
+//     .hit_i(hit_i),
+//     .cur_set(cur_set),
+//     .victim_indicator_i(victim_indicator_i),
+//     .internal_addr(internal_addr),
+//     .data_set(data_set),
+//     .tag_set(tag_set),
+
+//     .o_pe_data_o(o_pe_data_o),
+//     .o_dram_data_o(o_dram_data_o),
+//     .o_dram_addr(o_dram_addr)
+// );
+
+pe_data_handler #(
     .BIT_SIZE(BIT_SIZE),
     .DATA_WIDTH(DATA_WIDTH),
-    .SETS(SETS),
-    .WAYS(WAYS),
-    .ADDR_WIDTH(ADDR_WIDTH)
-) inout_handler_u (
+    .WAYS(WAYS)
+) pe_data_handler_u (
     .i_clk(i_clk),
-    .is_state_fetch(is_state_fetch),
     .is_state_read(is_state_read),
-    .is_state_write(is_state_write),
     .is_state_consume(is_state_consume),
-    .is_internal_state_receive_data(is_internal_state_receive_data),
+    .hit_i(hit_i),
+    .data_set(data_set),
+    .o_pe_data_o(o_pe_data_o)
+);
 
+dram_data_handler #(
+    .BIT_SIZE(BIT_SIZE),
+    .DATA_WIDTH(DATA_WIDTH),
+    .WAYS(WAYS)
+) dram_data_handler_u (
+    .i_clk(i_clk),
     .miss(miss),
     .is_victim_dirty(is_victim_dirty),
-    .hit_i(hit_i),
-    .cur_set(cur_set),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
     .victim_indicator_i(victim_indicator_i),
-    .internal_addr(internal_addr),
     .data_set(data_set),
-    .tag_set(tag_set),
+    .o_dram_data_o(o_dram_data_o)
+);
 
-    .o_pe_data_o(o_pe_data_o),
-    .o_dram_data_o(o_dram_data_o),
+dram_addr_handler #(
+    .SETS(SETS),
+    .WAYS(WAYS),
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(DATA_WIDTH)
+) dram_addr_handler_u (
+    .i_clk(i_clk),
+    .miss(miss),
+    .is_victim_dirty(is_victim_dirty),
+    .is_state_fetch(is_state_fetch),
+    .is_state_write(is_state_write),
+    .is_internal_state_receive_data(is_internal_state_receive_data),
+    .victim_indicator_i(victim_indicator_i),
+    .cur_set(cur_set),
+    .tag_set(tag_set),
+    .internal_addr(internal_addr),
     .o_dram_addr(o_dram_addr)
 );
 

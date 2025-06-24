@@ -68,6 +68,11 @@ reg [ADDR_WIDTH-1:0] dirty_addr;
 always @(posedge i_clk) begin
     if (miss & is_victim_dirty & (is_state_fetch | is_state_write)) begin
         dirty_data <= dirty_data_comb;
+    end
+end
+
+always @(posedge i_clk) begin
+    if (miss & is_victim_dirty & (is_state_fetch | is_state_write)) begin
         dirty_addr <= dirty_addr_comb;
     end
 end
