@@ -248,34 +248,6 @@ data_logic #(
     .i_dram_data(i_dram_data)
 );
 
-// inout_handler #(
-//     .BIT_SIZE(BIT_SIZE),
-//     .DATA_WIDTH(DATA_WIDTH),
-//     .SETS(SETS),
-//     .WAYS(WAYS),
-//     .ADDR_WIDTH(ADDR_WIDTH)
-// ) inout_handler_u (
-//     .i_clk(i_clk),
-//     .is_state_fetch(is_state_fetch),
-//     .is_state_read(is_state_read),
-//     .is_state_write(is_state_write),
-//     .is_state_consume(is_state_consume),
-//     .is_internal_state_receive_data(is_internal_state_receive_data),
-
-//     .miss(miss),
-//     .is_victim_dirty(is_victim_dirty),
-//     .hit_i(hit_i),
-//     .cur_set(cur_set),
-//     .victim_indicator_i(victim_indicator_i),
-//     .internal_addr(internal_addr),
-//     .data_set(data_set),
-//     .tag_set(tag_set),
-
-//     .o_pe_data_o(o_pe_data_o),
-//     .o_dram_data_o(o_dram_data_o),
-//     .o_dram_addr(o_dram_addr)
-// );
-
 pe_data_handler #(
     .BIT_SIZE(BIT_SIZE),
     .DATA_WIDTH(DATA_WIDTH),

@@ -76,7 +76,7 @@ generate
                                     // new_emi
                                     {new_priority_set[gen_i], new_srrip_set[gen_i]}, 
                                     new_addr_bits[gen_i]
-                                };//, cur_tag}
+                                };
     end
 endgenerate
 

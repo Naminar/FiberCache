@@ -16,28 +16,45 @@ module emi_update #(
 wire    [WAYS-1:0]          min_indicator;
 wire    [WAYS-1:0]          max_srrip_indicator;
 wire    [WAYS-1:0] is_victim_dirty_i;
-reg     [PRIORITY_BITS-1:0] min_priority;
+wire     [PRIORITY_BITS-1:0] min_priority;
 reg     [SRRIP_BITS-1:0]    max_srrip;
 reg     [WAYS-1:0]          invalid_bits_line;
 
 wire    is_smth_invalid = |invalid_bits_line;
 assign  is_victim_dirty = |is_victim_dirty_i;
 
-always @(*) begin
-    min_priority = {PRIORITY_BITS{1'b1}};
-    for (int i = 0; i < WAYS; i++) begin
-        if (priority_set[i] < min_priority)
-            min_priority = priority_set[i];
-    end
-end
+// always @(*) begin
+//     min_priority = {PRIORITY_BITS{1'b1}};
+//     for (int i = 0; i < WAYS; i++) begin
+//         if (priority_set[i] < min_priority)
+//             min_priority = priority_set[i];
+//     end
+// end
 
-always @(*) begin
-    max_srrip = {SRRIP_BITS{1'b0}};
-    for (int i = 0; i < WAYS; i++) begin
-        if ((srrip_set[i] > max_srrip) & min_indicator[i] == 1'b1)
-            max_srrip = srrip_set[i];
-    end
-end
+// always @(*) begin
+//     max_srrip = {SRRIP_BITS{1'b0}};
+//     for (int i = 0; i < WAYS; i++) begin
+//         if ((srrip_set[i] > max_srrip) & min_indicator[i] == 1'b1)
+//             max_srrip = srrip_set[i];
+//     end
+// end
+
+reduction_tree #(
+    .WAYS(WAYS),
+    .PRIORITY_BITS(PRIORITY_BITS)
+) min_priority_tree (
+    .priority_set(priority_set),
+    .min_priority(min_priority)
+);
+
+max_srrip_reduction_tree #(
+    .WAYS(WAYS),
+    .SRRIP_BITS(SRRIP_BITS)
+) max_srrip_tree (
+    .srrip_set(srrip_set),
+    .min_indicator(min_indicator),
+    .max_srrip(max_srrip)
+);
 
 genvar gen_i;
 generate
