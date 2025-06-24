@@ -19,16 +19,31 @@ module dram_addr_handler #(
 
 localparam TAG_WIDTH = ADDR_WIDTH - $clog2(SETS) - $clog2(DATA_WIDTH);
 
-wire [WAYS:0] [TAG_WIDTH-1:0] tag_or;
-assign tag_or[0] = {TAG_WIDTH{1'b0}};
-
+wire [WAYS-1:0] [TAG_WIDTH-1:0] masked_tag;
 generate
 for (genvar i = 0; i < WAYS; i++) begin : gen_tag
-    assign tag_or[i+1] = tag_or[i] | (tag_set[i] & {TAG_WIDTH{victim_indicator_i[i]}});
+    assign masked_tag[i] = tag_set[i] & {TAG_WIDTH{victim_indicator_i[i]}};
 end
 endgenerate
 
-wire [TAG_WIDTH-1:0] selected_tag = tag_or[WAYS];
+wire [TAG_WIDTH-1:0] selected_tag = 
+    masked_tag[0] |
+    masked_tag[1] |
+    masked_tag[2] |
+    masked_tag[3] |
+    masked_tag[4] |
+    masked_tag[5] |
+    masked_tag[6] |
+    masked_tag[7] |
+    masked_tag[8] |
+    masked_tag[9] |
+    masked_tag[10] |
+    masked_tag[11] |
+    masked_tag[12] |
+    masked_tag[13] |
+    masked_tag[14] |
+    masked_tag[15];
+
 wire [ADDR_WIDTH-1:0] dirty_addr_comb = {selected_tag, cur_set, {$clog2(DATA_WIDTH){1'b0}}};
 
 reg [ADDR_WIDTH-1:0] dirty_addr;

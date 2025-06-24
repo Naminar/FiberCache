@@ -13,16 +13,31 @@ module dram_data_handler #(
     output wire [DATA_WIDTH*BIT_SIZE-1:0] o_dram_data_o
 );
 
-wire [WAYS:0] [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_or;
-assign dirty_data_or[0] = {DATA_WIDTH*BIT_SIZE{1'b0}};
 
+wire [WAYS-1:0] [DATA_WIDTH*BIT_SIZE-1:0] masked_data;
 generate
-for (genvar i = 0; i < WAYS; i++) begin : gen_dirty_data
-    assign dirty_data_or[i+1] = dirty_data_or[i] | (data_set[i] & {DATA_WIDTH*BIT_SIZE{victim_indicator_i[i]}});
-end
+    for (genvar i = 0; i < WAYS; i++) begin : gen_masked_data
+        assign masked_data[i] = data_set[i] & {DATA_WIDTH*BIT_SIZE{victim_indicator_i[i]}};
+    end
 endgenerate
 
-wire [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_comb = dirty_data_or[WAYS];
+wire [DATA_WIDTH*BIT_SIZE-1:0] dirty_data_comb = 
+    masked_data[0] |
+    masked_data[1] |
+    masked_data[2] |
+    masked_data[3] |
+    masked_data[4] |
+    masked_data[5] |
+    masked_data[6] |
+    masked_data[7] |
+    masked_data[8] |
+    masked_data[9] |
+    masked_data[10] |
+    masked_data[11] |
+    masked_data[12] |
+    masked_data[13] |
+    masked_data[14] |
+    masked_data[15];
 
 reg [DATA_WIDTH*BIT_SIZE-1:0] dirty_data;
 
